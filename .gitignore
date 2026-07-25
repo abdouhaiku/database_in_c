@@ -1,0 +1,12 @@
+# Build artifacts
+cmake-build-*/
+build/
+*.o
+*.obj
+*.out
+
+# CLion / JetBrains IDE
+.idea/
+
+# macOS
+.DS_Store
