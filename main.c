@@ -61,6 +61,12 @@ typedef struct {
     char email[255];
 } Row;
 
+typedef struct {
+    Row *rows;
+    size_t num_rows;
+    size_t capacity;
+} Table;
+
 CommandResult do_meta_command(InputBuffer *input_buffer) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
         return COMMAND_SUCCESS;
@@ -69,7 +75,8 @@ CommandResult do_meta_command(InputBuffer *input_buffer) {
     return UNRECOGNIZED_COMMAND;
 }
 
-void process_command(InputBuffer *input_buffer) {
+
+void process_command(InputBuffer *input_buffer, Table *table) {
     //split by whitespace first
     //variable to calculate the count of the tokens
     char *token;
@@ -77,17 +84,15 @@ void process_command(InputBuffer *input_buffer) {
     const char *delim = " \t\n";
     char *endptr;
     char *p = input_buffer->buffer;
-    Row row;
-    char* tokens[4];
+    char *tokens[4];
 
     while ((token = strsep(&p, delim)) != NULL) {
         if (*token != '\0') {
-            if (count <4) {
+            if (count < 4) {
                 tokens[count] = token;
                 // Skip empty tokens from consecutive spaces
                 printf("Token: %s\n", token);
                 count++;
-
             }
         }
     }
@@ -103,6 +108,17 @@ void process_command(InputBuffer *input_buffer) {
         printf("Wrong command, try again!\n");
         return;
     }
+    if (table->num_rows == table->capacity) {
+        //reset errno
+        errno = 0;
+        Row *tmp = realloc(table->rows, table->capacity * 2 * sizeof(Row));
+        if (tmp == NULL) {
+            perror("Reallocation failed, try again\n");
+            return;
+        }
+        table->capacity = 2 * table->capacity;
+        table->rows = tmp;
+    }
 
     //TODO : check if the ID is not duplicated
     errno = 0;
@@ -117,25 +133,36 @@ void process_command(InputBuffer *input_buffer) {
         printf("Value out of int range\n");
         return;
     } else {
-        row.id = result;
+        table->rows[table->num_rows].id = result;
         printf("Value = %ld\n", result);
     }
-    if (strlen(tokens[2]) >= sizeof(row.username)) {
+    if (strlen(tokens[2]) >= sizeof(table->rows[table->num_rows].username)) {
         printf("Username too long\n");
         return;
     }
-    strncpy(row.username, tokens[2], sizeof(row.username) - 1);
-    row.username[sizeof(row.username) - 1] = '\0';
-    if (strlen(tokens[3]) >= sizeof(row.email)) {
+    strncpy(table->rows[table->num_rows].username, tokens[2],
+            sizeof(table->rows[table->num_rows].username) - 1);
+    table->rows[table->num_rows].username[sizeof(table->rows[table->num_rows].username) - 1] = '\0';
+    if (strlen(tokens[3]) >= sizeof(table->rows[table->num_rows].email)) {
         printf("Email too long! \n");
         return;
     }
-    strncpy(row.email, tokens[3], sizeof(row.email));
-    row.email[sizeof(row.email) - 1] = '\0';
+    strncpy(table->rows[table->num_rows].email, tokens[3], sizeof(table->rows[table->num_rows].email));
+    table->rows[table->num_rows].email[sizeof(table->rows[table->num_rows].email) - 1] = '\0';
+    table->num_rows++; 
 }
 
 int main(void) {
     InputBuffer *input_buffer = new_input_buffer();
+
+    Row *rows = malloc(4 * sizeof(Row));
+
+    //init table
+    Table table = {
+        rows,
+        0,
+        4
+    };
 
     while (1) {
         print_prompt();
@@ -161,7 +188,7 @@ int main(void) {
         }
 
         // process the command
-        process_command(input_buffer);
+        process_command(input_buffer, &table);
         printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
     }
 
