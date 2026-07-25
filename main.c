@@ -77,7 +77,7 @@ CommandResult do_meta_command(InputBuffer *input_buffer) {
 }
 
 
-int insert_command(char **tokens, Table *table, int total_tokens) {
+CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     if (total_tokens > 4) {
         printf("Too many arguments to insert!\n");
         return COMMAND_SUCCESS;
@@ -112,7 +112,7 @@ int insert_command(char **tokens, Table *table, int total_tokens) {
     }
 
     // check if the id is not duplicate
-    for (int i =0; i<table->num_rows; i++) {
+    for (size_t i = 0; i < table->num_rows; i++) {
         if (table->rows[i].id == result) {
             printf("Id %ld is duplicated",result );
             return ID_DUPLICATE_ERROR;
@@ -135,9 +135,9 @@ int insert_command(char **tokens, Table *table, int total_tokens) {
     return COMMAND_SUCCESS;
 }
 
-int select_all_command(Table *table) {
-    for (int i =0; i<table->num_rows; i++) {
-        printf("Row %d : %ld, %s, %s\n", i, table->rows[i].id, table->rows[i].username, table->rows[i].email);
+CommandResult select_all_command(Table *table) {
+    for (size_t i = 0; i < table->num_rows; i++) {
+        printf("Row %zu : %ld, %s, %s\n", i, table->rows[i].id, table->rows[i].username, table->rows[i].email);
     }
     return COMMAND_SUCCESS;
 }
@@ -146,7 +146,6 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     //split by whitespace first
     //variable to calculate the count of the tokens
     char *token;
-    int count = 0;
     int total_tokens = 0;
     const char *delim = " \t\n";
     char *p = input_buffer->buffer;
@@ -155,22 +154,19 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     while ((token = strsep(&p, delim)) != NULL) {
         if (*token != '\0') {
             total_tokens++;
-            if (count < 4) {
-                tokens[count] = token;
+            if (total_tokens <= 4) {
+                tokens[total_tokens - 1] = token;
                 // Skip empty tokens from consecutive spaces
                 printf("Token: %s\n", token);
-                count++;
             }
         }
     }
 
 
-    if (count < 4) {
-        printf("Not enough arguments to insert!\n");
+    if (total_tokens < 1) {
+        printf("No command entered!\n");
         return COMMAND_SUCCESS;
     }
-
-
 
     // Get first token
     if (strcmp(tokens[0], "insert") != 0 && strcmp(tokens[0], "select") != 0) {
@@ -179,11 +175,19 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     }
 
     if (strcmp(tokens[0], "insert") == 0) {
+        if (total_tokens < 4) {
+            printf("Not enough arguments to insert!\n");
+            return COMMAND_SUCCESS;
+        }
         return insert_command(tokens, table, total_tokens);
     }
-    else if (strcmp(tokens[0], "select") == 0) {
-        return select_all_command(table);
+
+    // select takes no arguments
+    if (total_tokens > 1) {
+        printf("Too many arguments to select!\n");
+        return COMMAND_SUCCESS;
     }
+    return select_all_command(table);
 }
 
 int main(void) {
