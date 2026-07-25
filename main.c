@@ -76,11 +76,12 @@ CommandResult do_meta_command(InputBuffer *input_buffer) {
 }
 
 
-void process_command(InputBuffer *input_buffer, Table *table) {
+CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     //split by whitespace first
     //variable to calculate the count of the tokens
     char *token;
     int count = 0;
+    int total_tokens = 0;
     const char *delim = " \t\n";
     char *endptr;
     char *p = input_buffer->buffer;
@@ -88,6 +89,7 @@ void process_command(InputBuffer *input_buffer, Table *table) {
 
     while ((token = strsep(&p, delim)) != NULL) {
         if (*token != '\0') {
+            total_tokens++;
             if (count < 4) {
                 tokens[count] = token;
                 // Skip empty tokens from consecutive spaces
@@ -100,21 +102,27 @@ void process_command(InputBuffer *input_buffer, Table *table) {
 
     if (count < 4) {
         printf("Not enough arguments to insert!\n");
-        return;
+        return COMMAND_SUCCESS;
     }
 
     // Get first token
     if (strcmp(tokens[0], "insert") != 0) {
         printf("Wrong command, try again!\n");
-        return;
+        return UNRECOGNIZED_COMMAND;
     }
+
+    if (total_tokens > 4) {
+        printf("Too many arguments to insert!\n");
+        return COMMAND_SUCCESS;
+    }
+
     if (table->num_rows == table->capacity) {
         //reset errno
         errno = 0;
         Row *tmp = realloc(table->rows, table->capacity * 2 * sizeof(Row));
         if (tmp == NULL) {
             perror("Reallocation failed, try again\n");
-            return;
+            return COMMAND_SUCCESS;
         }
         table->capacity = 2 * table->capacity;
         table->rows = tmp;
@@ -125,37 +133,43 @@ void process_command(InputBuffer *input_buffer, Table *table) {
     long result = strtol(tokens[1], &endptr, 10);
     if (errno != 0) {
         perror("strtol");
-        return;
+        return COMMAND_SUCCESS;
     } else if (*endptr != '\0') {
         printf("Invalid number: '%s'\n", endptr);
-        return;
+        return COMMAND_SUCCESS;
     } else if (result < INT_MIN || result > INT_MAX) {
         printf("Value out of int range\n");
-        return;
+        return COMMAND_SUCCESS;
     } else {
         table->rows[table->num_rows].id = result;
         printf("Value = %ld\n", result);
     }
     if (strlen(tokens[2]) >= sizeof(table->rows[table->num_rows].username)) {
         printf("Username too long\n");
-        return;
+        return COMMAND_SUCCESS;
     }
     strncpy(table->rows[table->num_rows].username, tokens[2],
             sizeof(table->rows[table->num_rows].username) - 1);
     table->rows[table->num_rows].username[sizeof(table->rows[table->num_rows].username) - 1] = '\0';
     if (strlen(tokens[3]) >= sizeof(table->rows[table->num_rows].email)) {
         printf("Email too long! \n");
-        return;
+        return COMMAND_SUCCESS;
     }
     strncpy(table->rows[table->num_rows].email, tokens[3], sizeof(table->rows[table->num_rows].email));
     table->rows[table->num_rows].email[sizeof(table->rows[table->num_rows].email) - 1] = '\0';
-    table->num_rows++; 
+    table->num_rows++;
+
+    return COMMAND_SUCCESS;
 }
 
 int main(void) {
     InputBuffer *input_buffer = new_input_buffer();
 
     Row *rows = malloc(4 * sizeof(Row));
+    if (rows == NULL) {
+        fprintf(stderr, "Failed to allocate row storage.\n");
+        exit(EXIT_FAILURE);
+    }
 
     //init table
     Table table = {
@@ -188,8 +202,10 @@ int main(void) {
         }
 
         // process the command
-        process_command(input_buffer, &table);
-        printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
+        CommandResult command_result = process_command(input_buffer, &table);
+        if (command_result == UNRECOGNIZED_COMMAND) {
+            printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
+        }
     }
 
     close_input_buffer(input_buffer);
