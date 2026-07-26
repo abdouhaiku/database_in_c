@@ -58,7 +58,6 @@ void *pager_get_page(Pager *pager, uint32_t page_number) {
             return NULL;
         }
 
-
         // -1 because because even one extra byte requires another page
         size_t num_pages = (pager->file_length + PAGE_SIZE - 1) / PAGE_SIZE;
         if (page_number < num_pages) {

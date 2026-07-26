@@ -11,19 +11,11 @@
 
 int main(void) {
     InputBuffer *input_buffer = new_input_buffer();
-
-    Row *rows = malloc(4 * sizeof(Row));
-    if (rows == NULL) {
-        fprintf(stderr, "Failed to allocate row storage.\n");
-        exit(EXIT_FAILURE);
+    Table *table = table_open("db.bin");
+    if (table == NULL) {
+        printf("Problem in creating the table object\n");
+        return -1;
     }
-
-    //init table
-    Table table = {
-        rows,
-        0,
-        4
-    };
 
     while (1) {
         print_prompt();
@@ -41,6 +33,7 @@ int main(void) {
             switch (do_meta_command(input_buffer)) {
                 case COMMAND_SUCCESS:
                     close_input_buffer(input_buffer);
+                    table_close(table);
                     return EXIT_SUCCESS;
                 case UNRECOGNIZED_COMMAND:
                     printf("Unrecognized command '%s'.\n", input_buffer->buffer);
@@ -51,7 +44,7 @@ int main(void) {
         }
 
         // process the command
-        CommandResult command_result = process_command(input_buffer, &table);
+        CommandResult command_result = process_command(input_buffer, table);
         if (command_result == UNRECOGNIZED_COMMAND) {
             printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
         }
