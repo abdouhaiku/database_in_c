@@ -10,5 +10,6 @@ add_executable(database_in_c
         src/table.c
         src/command.c
         src/main.c
+        src/pager.c
 )
 target_include_directories(database_in_c PRIVATE include)
