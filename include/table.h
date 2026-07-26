@@ -2,12 +2,13 @@
 #define DATABASE_IN_C_TABLE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "command_result.h"
 #include "pager.h"
 
 typedef struct {
-    long id;
+    int64_t id;
     char username[25];
     char email[255];
 } Row;

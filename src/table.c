@@ -37,7 +37,7 @@ Table *table_open(const char *filename) {
     return table;
 }
 
-int check_duplicate(long key, Table *table) {
+CommandResult check_duplicate(int64_t key, Table *table) {
     for (size_t i = 0; i < table->num_rows; i++) {
         Row row;
         uint8_t *row_ptr = row_slot(table, i);
@@ -50,13 +50,12 @@ int check_duplicate(long key, Table *table) {
             return ID_DUPLICATE_ERROR;
         }
     }
-    return 0;
+    return COMMAND_SUCCESS;
 }
 
 
 CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     Row row;
-    memset(&row, 0, sizeof(row));
     if (total_tokens > 4) {
         printf("Too many arguments to insert!\n");
         return COMMAND_SUCCESS;
