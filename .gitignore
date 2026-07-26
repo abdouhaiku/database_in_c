@@ -5,6 +5,9 @@ build/
 *.obj
 *.out
 
+# Database files created by running the REPL
+db.bin
+
 # CLion / JetBrains IDE
 .idea/
 
