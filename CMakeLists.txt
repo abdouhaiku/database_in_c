@@ -11,5 +11,6 @@ add_executable(database_in_c
         src/command.c
         src/main.c
         src/pager.c
+        tests/Btree.c
 )
 target_include_directories(database_in_c PRIVATE include)
