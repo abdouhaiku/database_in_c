@@ -214,19 +214,81 @@ void btree_display(const BTree *t)
 /* ------------------------------------------------------------------ */
 int main(void)
 {
-    long seq[] = { 20, 40, 60, 80, 70, 10, 30, 15,
-                   75, 85, 90, 25, 35, 50, 22, 27, 32 };
-    int n = (int)(sizeof seq / sizeof seq[0]);
+/* debug_main.c — drop-in replacement for main() in btree.c
+ *
+ * Replays the exact insertion sequence of Figure 10.25 and prints the
+ * tree at every labeled stage a) ... i) of the figure, so you can diff
+ * your tree state against the book while debugging.
+ *
+ * Usage: replace the main() at the bottom of btree.c with this one
+ * (or #include this file's body). Requires ORDER == 5.
+ */
 
-    BTree *t = btree_create();
-    for (int i = 0; i < n; i++)
-        btree_insert(t, seq[i]);
-
-    printf("Tree after inserting the Figure 10.25 sequence:\n");
+static void stage(const char *label, const BTree *t)
+{
+    printf("---- stage %s ----\n", label);
     btree_display(t);
+    printf("\n");
+}
 
-    printf("\nsearch 32 -> %s\n", btree_search(t, 32) ? "found" : "absent");
-    printf("search 33 -> %s\n",   btree_search(t, 33) ? "found" : "absent");
+int main(void)
+{
+    BTree *t = btree_create();
+
+    /* a) root fills up: [20|40|60|80], 70 about to be inserted */
+    btree_insert(t, 20);
+    btree_insert(t, 40);
+    btree_insert(t, 60);
+    btree_insert(t, 80);
+    stage("a  (root full, before inserting 70)", t);
+
+    /* b) 70 overflows the root: seq 20,40,60,70,80 -> 60 promoted,
+     *    new root created. Then 10 and 30 are inserted.             */
+    btree_insert(t, 70);
+    stage("b  (after root split on 70)", t);
+
+    /* c) 10 and 30 fill the left leaf; 15 about to be inserted */
+    btree_insert(t, 10);
+    btree_insert(t, 30);
+    stage("c  (left leaf full, before inserting 15)", t);
+
+    /* d) 15 splits the left leaf: seq 10,15,20,30,40 -> 20 promoted */
+    btree_insert(t, 15);
+    stage("d  (after leaf split on 15)", t);
+
+    /* e) 75, 85 fill the right leaf; 90 splits it:
+     *    seq 70,75,80,85,90 -> 80 promoted                          */
+    btree_insert(t, 75);
+    btree_insert(t, 85);
+    btree_insert(t, 90);
+    stage("e  (after leaf split on 90)", t);
+
+    /* f) 25, 35 fill the second leaf; 50 splits it:
+     *    seq 25,30,35,40,50 -> 35 promoted. Root is now full.       */
+    btree_insert(t, 25);
+    btree_insert(t, 35);
+    btree_insert(t, 50);
+    stage("f  (after leaf split on 50; root now full)", t);
+
+    /* g) 22 and 27 go into [25|30] WITHOUT splits, even though the
+     *    root above is full — splits only fire on real overflow.    */
+    btree_insert(t, 22);
+    btree_insert(t, 27);
+    stage("g  (22, 27 inserted with NO splits)", t);
+
+    /* h)+i) 32 overflows [22|25|27|30]: seq 22,25,27,30,32 -> 27 up;
+     *    but the root [20|35|60|80] is full too, so it also splits:
+     *    seq 20,27,35,60,80 -> 35 up -> new root, height grows.     */
+    btree_insert(t, 32);
+    stage("i  (after double split on 32 — final tree)", t);
+
+    /* sanity: every inserted key must be found */
+    long all[] = {10,15,20,22,25,27,30,32,35,40,50,60,70,75,80,85,90};
+    int n = (int)(sizeof all / sizeof all[0]), ok = 1;
+    for (int i = 0; i < n; i++)
+        if (!btree_search(t, all[i])) { ok = 0;
+            printf("MISSING KEY: %ld\n", all[i]); }
+    printf("search check: %s\n", ok ? "all 17 keys found" : "FAILED");
 
     btree_destroy(t);
     return 0;
