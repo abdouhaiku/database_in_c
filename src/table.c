@@ -109,28 +109,17 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
 }
 
 CommandResult select_all_command(Table *table) {
-    for (size_t i = 0; i < table->num_rows; i++) {
-        // deserialize the row
+    void *page = pager_get_page(table->pager, 0);   // for now the one leaf lives at page 0
+    if (page == NULL) {
+        return -1;
+    }
+    uint32_t num_cells = *leaf_node_num_cells(page);
+    for (uint32_t i = 0; i < num_cells; i++) {
         Row row;
-        memset(&row, 0, sizeof(row));
-        uint8_t *row_ptr = row_slot(table, i);
-        if (row_ptr == NULL) {
-            return -1; 
-        }
-        deserialize_row(row_ptr, &row);
-        printf("Row %zu : %ld, %s, %s\n", i, row.id, row.username, row.email);
+        deserialize_row(leaf_node_value(page, i), &row);
+        printf("Row %u : %ld, %s, %s\n", i, row.id, row.username, row.email);
     }
     return COMMAND_SUCCESS;
-}
-
-
-static void *row_slot(Table *table, size_t row_number) {
-    uint32_t page_number = row_number / ROWS_PER_PAGE;
-    void *page = pager_get_page(table->pager, page_number);
-    if (page == NULL) {
-        return NULL;
-    }
-    return (uint8_t *) page + (row_number % ROWS_PER_PAGE) * ROW_SIZE;
 }
 
 void serialize_row(const Row *row, uint8_t *destination) {

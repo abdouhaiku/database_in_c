@@ -17,7 +17,6 @@ typedef struct {
 
 typedef struct {
     Pager *pager;
-    size_t num_rows;
 } Table;
 
 CommandResult insert_command(char **tokens, Table *table, int total_tokens);
