@@ -8,7 +8,7 @@
 #include "repl.h"
 #include "table.h"
 
-CommandResult do_meta_command(InputBuffer *input_buffer);
+CommandResult do_meta_command(InputBuffer *input_buffer, Table *table);
 
 CommandResult process_command(InputBuffer *input_buffer, Table *table);
 

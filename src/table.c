@@ -11,10 +11,8 @@
 
 
 
-static void *row_slot(Table *table, size_t row_number);
 
 void serialize_row(const Row *row, uint8_t *destination);
-
 void deserialize_row(const uint8_t *source, Row *row);
 
 

@@ -30,7 +30,7 @@ int main(void) {
         }
 
         if (input_buffer->buffer[0] == '.') {
-            switch (do_meta_command(input_buffer)) {
+            switch (do_meta_command(input_buffer,table)) {
                 case COMMAND_SUCCESS:
                     close_input_buffer(input_buffer);
                     table_close(table);
@@ -40,6 +40,8 @@ int main(void) {
                     continue;
                 case ID_DUPLICATE_ERROR:
                     break;
+                case DEBUG_BTREE_SUCCESS:
+                    continue;
             }
         }
 

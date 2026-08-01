@@ -1,5 +1,6 @@
 #include "btree.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "command_result.h"
@@ -71,4 +72,13 @@ CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const
     *leaf_node_num_cells(page) = num_cells + 1;
 
     return COMMAND_SUCCESS;
+}
+
+
+void debug_leaf_node(void *page) {
+    uint32_t num_cells = *leaf_node_num_cells(page);
+    printf("Leaf ( size %u)\n", num_cells);
+    for (uint32_t i =0; i<num_cells; i++) {
+        printf("- %ld\n", *leaf_node_key(page, i));
+    }
 }

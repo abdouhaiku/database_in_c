@@ -6,12 +6,22 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "btree.h"
 #include "repl.h"
 #include "table.h"
 
-CommandResult do_meta_command(InputBuffer *input_buffer) {
+CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
         return COMMAND_SUCCESS;
+    }
+    if (strcmp(input_buffer->buffer, ".btree") == 0) {
+        void *page = pager_get_page(table->pager, 0);
+        if (page == NULL) {
+            printf("Error reading leaf node\n");
+            return DEBUG_BTREE_SUCCESS;
+        }
+        debug_leaf_node(page);
+        return DEBUG_BTREE_SUCCESS;
     }
 
     return UNRECOGNIZED_COMMAND;

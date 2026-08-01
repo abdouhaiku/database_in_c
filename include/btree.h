@@ -36,4 +36,5 @@ int64_t *leaf_node_key(void *page, uint32_t cell_num);
 uint8_t *leaf_node_value(void *page, uint32_t cell_num);
 uint32_t leaf_node_find(void *page, int64_t key);
 CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row);
+void debug_leaf_node(void *page);
 #endif //DATABASE_IN_C_BTREE_H
