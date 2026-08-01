@@ -8,8 +8,7 @@
 #include <string.h>
 #include "pager.h"
 
-#define ROW_SIZE 288
-#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
+
 
 static void *row_slot(Table *table, size_t row_number);
 

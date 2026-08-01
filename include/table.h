@@ -3,9 +3,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
 #include "command_result.h"
 #include "pager.h"
+
+#define ROW_SIZE 288
+#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
 
 typedef struct {
     int64_t id;
