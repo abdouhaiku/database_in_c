@@ -6,6 +6,7 @@
 
 #include <limits.h>
 #include <string.h>
+#include "btree.h"
 #include "pager.h"
 
 
@@ -30,6 +31,20 @@ Table *table_open(const char *filename) {
     if (pager == NULL) {
         free((table));
         return NULL;
+    }
+
+    bool is_new_file = (pager->file_length == 0);
+    errno = 0;
+    void* page0 = pager_get_page(pager, 0);
+    if (page0 == NULL) {
+        perror("Error in getting the page\n");
+        pager_close(pager);
+        free(table);
+        return NULL;
+    }
+
+    if (is_new_file) {
+        leaf_node_init(page0);
     }
     table->num_rows = pager->file_length / ROW_SIZE;
     table->pager = pager;
