@@ -44,7 +44,6 @@ Table *table_open(const char *filename) {
     if (is_new_file) {
         leaf_node_init(page0);
     }
-    table->num_rows = pager->file_length / ROW_SIZE;
     table->pager = pager;
     return table;
 }
