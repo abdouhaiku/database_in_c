@@ -34,4 +34,5 @@ uint32_t *leaf_node_num_cells(void *page);
 uint8_t *leaf_node_cell(void *page, uint32_t cell_num);
 int64_t *leaf_node_key(void *page, uint32_t cell_num);
 uint8_t *leaf_node_value(void *page, uint32_t cell_num);
+uint32_t leaf_node_find(void *page, int64_t key);
 #endif //DATABASE_IN_C_BTREE_H
