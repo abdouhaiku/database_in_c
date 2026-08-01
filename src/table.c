@@ -51,22 +51,6 @@ Table *table_open(const char *filename) {
     return table;
 }
 
-CommandResult check_duplicate(int64_t key, Table *table) {
-    for (size_t i = 0; i < table->num_rows; i++) {
-        Row row;
-        uint8_t *row_ptr = row_slot(table, i);
-        if (row_ptr == NULL) {
-            return -1;
-        }
-        deserialize_row(row_ptr, &row);
-        if (row.id == key) {
-            printf("Id %ld is duplicated\n", key);
-            return ID_DUPLICATE_ERROR;
-        }
-    }
-    return COMMAND_SUCCESS;
-}
-
 
 CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     Row row;
@@ -92,9 +76,16 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
         printf("Value = %ld\n", result);
     }
 
-    if (check_duplicate(result, table) == ID_DUPLICATE_ERROR) {
+    void *page = pager_get_page(table->pager, 0);   // for now the one leaf always lives at page 0
+    if (page == NULL) {
+        return -1;
+    }
+    uint32_t cell_num = leaf_node_find(page, row.id);
+    if (cell_num < *leaf_node_num_cells(page) && *leaf_node_key(page, cell_num) == row.id) {
+        printf("Id %ld is duplicated\n", row.id);
         return ID_DUPLICATE_ERROR;
     }
+
     if (strlen(tokens[2]) >= sizeof(row.username)) {
         printf("Username too long\n");
         return COMMAND_SUCCESS;
@@ -108,14 +99,12 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     }
     strncpy(row.email, tokens[3], sizeof(row.email));
     row.email[sizeof(row.email) - 1] = '\0';
-    uint8_t* row_ptr = row_slot(table, table->num_rows);
-    if (row_ptr == NULL) {
-        return -1;
+    CommandResult insert_result = leaf_node_insert(page, cell_num, row.id, &row);
+    if (insert_result == LEAF_FULL_ERROR) {
+        printf("Error: leaf node full, cannot insert\n");
+        return insert_result;
     }
-    serialize_row(&row, row_ptr);
-    uint32_t page_number = table->num_rows / ROWS_PER_PAGE;
-    pager_mark_dirty(table->pager, page_number);
-    table->num_rows++;
+    pager_mark_dirty(table->pager, 0);
     return COMMAND_SUCCESS;
 }
 
