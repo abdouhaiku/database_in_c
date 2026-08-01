@@ -23,7 +23,13 @@
 #define LEAF_NODE_SPACE_FOR_CELLS (PAGE_SIZE - LEAF_NODE_HEADER_SIZE) // 4082
 #define LEAF_NODE_MAX_CELLS      (LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE) // 13
 
+typedef enum {
+    NODE_LEAF,
+    NODE_INTERNAL
+} NodeType;
 
+
+void leaf_node_init(void *page);
 uint32_t *leaf_node_num_cells(void *page);
 uint8_t *leaf_node_cell(void *page, uint32_t cell_num);
 int64_t *leaf_node_key(void *page, uint32_t cell_num);
