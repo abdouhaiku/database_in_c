@@ -1,5 +1,9 @@
 #include "btree.h"
 
+#include <string.h>
+
+#include "command_result.h"
+
 
 void leaf_node_init(void *page) {
     *((uint8_t *) page + NODE_TYPE_OFFSET) = NODE_LEAF;
@@ -48,5 +52,23 @@ uint32_t leaf_node_find(void *page, int64_t key) {
 
     // if there is no exact match return low which will be the insertion point
     return low;
+}
 
+CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row) {
+    if (*leaf_node_num_cells(page) >= LEAF_NODE_MAX_CELLS) {
+        return LEAF_FULL_ERROR;
+    }
+
+    uint32_t num_cells = *leaf_node_num_cells(page);
+    // Move data by cell_num + 1 to complete the shifting operation
+    memmove(leaf_node_cell(page, cell_num + 1),
+            leaf_node_cell(page, cell_num),
+            (num_cells - cell_num) * LEAF_NODE_CELL_SIZE);
+    int64_t *keyptr = leaf_node_key(page, cell_num);
+    *keyptr = key;
+
+    serialize_row(row, leaf_node_value(page, cell_num));
+    *leaf_node_num_cells(page) = num_cells + 1;
+
+    return COMMAND_SUCCESS;
 }
