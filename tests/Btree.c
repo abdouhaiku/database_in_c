@@ -98,6 +98,19 @@ bool btree_search(const BTree *t, long key)
     return false;
 }
 
+bool btree_search_rec(BTreeNode *t, long key) {
+    if (t == NULL) return false;
+
+    int i = t->numKeys - 1;              /* start at the LAST real key */
+    while (i >= 0 && t->keys[i] > key)
+        i--;
+
+    if (i >= 0 && t->keys[i] == key)      /* guard with i>=0, not i<numKeys */
+        return true;
+
+    return btree_search_rec(t->children[i + 1], key);
+}
+
 /* ------------------------------------------------------------------ */
 /* Insertion helpers                                                   */
 /* ------------------------------------------------------------------ */
@@ -209,20 +222,6 @@ void btree_display(const BTree *t)
     rec_display(t->root, 0, 0);
 }
 
-/* ------------------------------------------------------------------ */
-/* Demo: replays the insertion sequence of Figure 10.25                */
-/* ------------------------------------------------------------------ */
-int main(void)
-{
-/* debug_main.c — drop-in replacement for main() in btree.c
- *
- * Replays the exact insertion sequence of Figure 10.25 and prints the
- * tree at every labeled stage a) ... i) of the figure, so you can diff
- * your tree state against the book while debugging.
- *
- * Usage: replace the main() at the bottom of btree.c with this one
- * (or #include this file's body). Requires ORDER == 5.
- */
 
 static void stage(const char *label, const BTree *t)
 {
