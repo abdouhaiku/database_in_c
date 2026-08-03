@@ -73,6 +73,6 @@ CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, u
 
 CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row);
 
-CommandResult split_internal_node(Pager *pager, void *old_page, int64_t new_key,
+CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);
 #endif //DATABASE_IN_C_BTREE_H

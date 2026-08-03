@@ -169,7 +169,7 @@ CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, u
 }
 
 
-CommandResult split_internal_node(Pager *pager, void *old_page, int64_t new_key,
+CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num) {
     int64_t temp_keys[INTERNAL_NODE_MAX_KEYS + 1];
     uint32_t temp_children[INTERNAL_NODE_MAX_KEYS + 2];
@@ -199,44 +199,58 @@ CommandResult split_internal_node(Pager *pager, void *old_page, int64_t new_key,
     // Now divide by 2
     // Get a page from the pager
 
-    uint32_t new_right_child_page_num = pager->num_pages;
+    //TODO : handle the case where this is a root
+    if (*((uint8_t*)old_page + IS_ROOT_OFFSET) == 1) {
+
+    }
+
+    uint32_t* parent_page_num = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+    if (parent_page_num == NULL) {
+        return -1;
+    }
+
+    memset((uint8_t*)old_page + INTERNAL_NODE_HEADER_SIZE, 0, INTERNAL_NODE_SPACE_FOR_CELLS);
+    uint32_t right_internal_page_num = pager->num_pages;
     void *right_internal_page = pager_get_page(pager, pager->num_pages);
     if (right_internal_page == NULL) {
         return -1;
     }
-
-    uint32_t new_left_child_page_num = pager->num_pages;
-    void *left_internal_page = pager_get_page(pager, pager->num_pages);
-    if (left_internal_page == NULL) {
-        return -1;
-    }
-
+    void *left_internal_page = old_page;
+    uint32_t left_internal_page_num = old_page_num;
     internal_node_init(right_internal_page, 0);
     internal_node_init(left_internal_page, 0);
-
     uint32_t mid = INTERNAL_NODE_MAX_KEYS / 2;
-
+    // Left gets temp[0 .. mid-1] mid entries, same indices as temp itself
     for (uint32_t i = 0; i < mid; i++) {
         *internal_node_key(left_internal_page, i) = temp_keys[i];
         *internal_node_value(left_internal_page, i) = temp_children[i];
-        *internal_node_key(right_internal_page, mid + i) = temp_keys[mid + i + 1];
-        *internal_node_value(right_internal_page, mid + i) = temp_children[mid + i + 1];
     }
-    *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_keys[mid];
-    *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_keys[mid];
 
-    uint32_t* parent_page = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+    // Right gets temp[mid+1 .. INTERNAL_NODE_MAX_KEYS] skipping the promoted key at mid
+    // but starting at right's OWN index 0, not offset by mid
+    for (uint32_t i = 0; i < INTERNAL_NODE_MAX_KEYS - mid; i++) {
+        *internal_node_key(right_internal_page, i) = temp_keys[mid + 1 + i];
+        *internal_node_value(right_internal_page, i) = temp_children[mid + 1 + i];
+    }
+
+    *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[mid];
+    *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[INTERNAL_NODE_MAX_KEYS + 1];
+    *internal_node_num_cells(left_internal_page) = mid;
+
+    *(uint32_t *) ((uint8_t *) right_internal_page + PARENT_POINTER_OFFSET) = *parent_page_num;
+    *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = *parent_page_num;
+    *internal_node_num_cells(left_internal_page) = mid;
+    *internal_node_num_cells(right_internal_page) = INTERNAL_NODE_MAX_KEYS - mid;
+    int64_t promoted = temp_keys[mid];
+
+    void *parent_page = pager_get_page(pager, *parent_page_num);
     if (parent_page == NULL) {
         return -1;
     }
-    *(uint32_t *) ((uint8_t *) right_internal_page + PARENT_POINTER_OFFSET) = *parent_page;
-    *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = *parent_page;
-    int64_t promoted = temp_keys[mid];
-
     uint32_t new_cell_num = internal_node_find(parent_page, promoted);
-    if (internal_node_insert(parent_page, new_cell_num, promoted, new_left_child_page_num, new_right_child_page_num) ==
+    if (internal_node_insert(parent_page, new_cell_num, promoted, old_page_num, right_internal_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
-            return split_internal_node(pager, parent_page, promoted, new_left_child_page_num, new_right_child_page_num);
+            return split_internal_node(pager, parent_page, *parent_page_num, promoted, left_internal_page_num, right_internal_page_num);
         }
 
     return COMMAND_SUCCESS;
