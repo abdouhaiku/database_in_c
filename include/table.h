@@ -26,5 +26,6 @@ CommandResult select_all_command(Table *table);
 Table *table_open(const char *filename);
 void   table_close(Table *table);
 void serialize_row(const Row *row, uint8_t *destination);
+void deserialize_row(const uint8_t *source, Row *row);
 
 #endif //DATABASE_IN_C_TABLE_H

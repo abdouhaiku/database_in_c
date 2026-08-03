@@ -34,6 +34,7 @@ Pager *pager_open(const char *filename) {
     }
 
     pager->file_length = file_length;
+    pager->num_pages = file_length / PAGE_SIZE;
     lseek(fd, 0, SEEK_SET);
 
     for (uint32_t i = 0; i < TABLES_MAX_PAGES; i++) {
@@ -78,6 +79,9 @@ void *pager_get_page(Pager *pager, uint32_t page_number) {
         }
 
         pager->pages[page_number] = page;
+        if (page_number >= pager->num_pages) {
+            pager->num_pages = page_number + 1;
+        }
     }
 
     return pager->pages[page_number];

@@ -4,11 +4,20 @@
 #include <string.h>
 
 #include "command_result.h"
+#include "table.h"
 
 
 void leaf_node_init(void *page) {
     *((uint8_t *) page + NODE_TYPE_OFFSET) = NODE_LEAF;
     *((uint8_t *) page + IS_ROOT_OFFSET) = 1;
+    uint32_t *num_cells_ptr = leaf_node_num_cells(page);
+    *num_cells_ptr = 0;
+    *(uint32_t *) ((uint8_t *) page + NEXT_LEAF_OFFSET) = 0;
+}
+
+void internal_node_init(void *page, int is_root) {
+    *((uint8_t *) page + NODE_TYPE_OFFSET) = NODE_INTERNAL;
+    *((uint8_t *) page + IS_ROOT_OFFSET) = is_root;
     uint32_t *num_cells_ptr = leaf_node_num_cells(page);
     *num_cells_ptr = 0;
     *(uint32_t *) ((uint8_t *) page + NEXT_LEAF_OFFSET) = 0;
@@ -78,7 +87,271 @@ CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const
 void debug_leaf_node(void *page) {
     uint32_t num_cells = *leaf_node_num_cells(page);
     printf("Leaf ( size %u)\n", num_cells);
-    for (uint32_t i =0; i<num_cells; i++) {
-        printf("- %ld\n", *leaf_node_key(page, i));
+    for (uint32_t i = 0; i < num_cells; i++) {
+        printf("- %lld\n", *leaf_node_key(page, i));
     }
+}
+
+
+uint32_t *internal_node_num_cells(void *page) {
+    return (uint32_t *) ((uint8_t *) page + INTERNAL_NODE_NUM_KEYS_OFFSET);
+}
+
+uint8_t *internal_node_cell(void *page, uint32_t cell_num) {
+    return (uint8_t *) page + INTERNAL_NODE_HEADER_SIZE + (cell_num * INTERNAL_NODE_CELL_SIZE);
+}
+
+int64_t *internal_node_key(void *page, uint32_t cell_num) {
+    return (int64_t *) internal_node_cell(page, cell_num);
+}
+
+uint32_t *internal_node_value(void *page, uint32_t cell_num) {
+    return (uint32_t *) ((uint8_t *) internal_node_key(page, cell_num) + INTERNAL_NODE_KEY_SIZE);
+}
+
+uint32_t internal_node_find(void *page, int64_t key) {
+    uint32_t low = 0;
+    uint32_t high = *internal_node_num_cells(page);
+
+    while (low < high) {
+        uint32_t mid = low + ((high - low) / 2);
+        int64_t key_value = *internal_node_key(page, mid);
+
+        if (key == key_value) {
+            return mid;
+        }
+        if (key_value < key) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    // the index of the first existing key that's ≥ the new key
+    return low;
+}
+
+uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key) {
+    uint8_t *curr = page; // page is the root node
+    while (*(curr + NODE_TYPE_OFFSET) != NODE_LEAF) {
+        uint32_t num_cells = *internal_node_num_cells(curr);
+        uint32_t i = num_cells;
+        while (i > 0 && *internal_node_key(curr, i - 1) > key) {
+            i--;
+        } //Get the associated page from the cell_num=i
+        uint32_t child_page_num = *internal_node_value(curr, i);
+        curr = (uint8_t *) pager_get_page(pager, child_page_num);
+        if (curr == NULL) {
+            return NULL;
+        }
+    }
+    return curr;
+}
+
+CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, uint32_t left_child_page_num,
+                                   uint32_t right_child_page_num) {
+    //TODO
+    if (*internal_node_num_cells(page) >= INTERNAL_NODE_MAX_KEYS) {
+        return INTERNAL_NODE_FULL_ERROR;
+    }
+
+
+    uint32_t num_cells = *internal_node_num_cells(page);
+    // Move data by cell_num + 1 to complete the shifting operation
+    memmove(internal_node_cell(page, cell_num + 1),
+            internal_node_cell(page, cell_num),
+            (num_cells - cell_num) * INTERNAL_NODE_CELL_SIZE);
+
+    *internal_node_value(page, cell_num + 1) = right_child_page_num;
+
+    *internal_node_key(page, cell_num) = key;
+    *internal_node_value(page, cell_num) = left_child_page_num;
+    return COMMAND_SUCCESS;
+}
+
+
+CommandResult split_internal_node(Pager *pager, void *old_page, int64_t new_key,
+                                  uint32_t left_child_page_num, uint32_t right_child_page_num) {
+    int64_t temp_keys[INTERNAL_NODE_MAX_KEYS + 1];
+    uint32_t temp_children[INTERNAL_NODE_MAX_KEYS + 2];
+
+    uint32_t cell_num = internal_node_find(old_page, new_key);
+
+    //Copy all the children node in temp_keys
+    for (uint32_t i = 0; i < *internal_node_num_cells(old_page); i++) {
+        temp_keys[i] = *internal_node_key(old_page, i);
+        temp_children[i] = *internal_node_value(old_page, i);
+    }
+
+    temp_children[INTERNAL_NODE_MAX_KEYS] = *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET);
+
+    memmove(temp_keys+cell_num+1,
+            temp_keys+cell_num,
+            (INTERNAL_NODE_MAX_KEYS - cell_num) * sizeof(int64_t));
+
+    memmove(temp_children+cell_num+1,
+            temp_children+cell_num,
+            (INTERNAL_NODE_MAX_KEYS - cell_num + 1) * sizeof(uint32_t));
+
+    temp_keys[cell_num] = new_key;
+    temp_children[cell_num] = left_child_page_num;
+    temp_children[cell_num + 1] = right_child_page_num;
+
+    // Now divide by 2
+    // Get a page from the pager
+
+    uint32_t new_right_child_page_num = pager->num_pages;
+    void *right_internal_page = pager_get_page(pager, pager->num_pages);
+    if (right_internal_page == NULL) {
+        return -1;
+    }
+
+    uint32_t new_left_child_page_num = pager->num_pages;
+    void *left_internal_page = pager_get_page(pager, pager->num_pages);
+    if (left_internal_page == NULL) {
+        return -1;
+    }
+
+    internal_node_init(right_internal_page, 0);
+    internal_node_init(left_internal_page, 0);
+
+    uint32_t mid = INTERNAL_NODE_MAX_KEYS / 2;
+
+    for (uint32_t i = 0; i < mid; i++) {
+        *internal_node_key(left_internal_page, i) = temp_keys[i];
+        *internal_node_value(left_internal_page, i) = temp_children[i];
+        *internal_node_key(right_internal_page, mid + i) = temp_keys[mid + i + 1];
+        *internal_node_value(right_internal_page, mid + i) = temp_children[mid + i + 1];
+    }
+    *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_keys[mid];
+    *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_keys[mid];
+
+    uint32_t* parent_page = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+    if (parent_page == NULL) {
+        return -1;
+    }
+    *(uint32_t *) ((uint8_t *) right_internal_page + PARENT_POINTER_OFFSET) = *parent_page;
+    *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = *parent_page;
+    int64_t promoted = temp_keys[mid];
+
+    uint32_t new_cell_num = internal_node_find(parent_page, promoted);
+    if (internal_node_insert(parent_page, new_cell_num, promoted, new_left_child_page_num, new_right_child_page_num) ==
+        INTERNAL_NODE_FULL_ERROR) {
+            return split_internal_node(pager, parent_page, promoted, new_left_child_page_num, new_right_child_page_num);
+        }
+
+    return COMMAND_SUCCESS;
+
+}
+
+
+CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
+                              const Row *new_row) {
+    typedef struct {
+        Row row;
+        int64_t key;
+    } NodeEntry;
+
+    uint32_t left_child_page_num = 0;
+    uint32_t right_child_page_num = 0;
+    //copy all the keys of the old page plus the new keys into a temp buffer
+    NodeEntry temp[LEAF_NODE_MAX_CELLS + 1];
+    for (uint32_t i = 0; i < LEAF_NODE_MAX_CELLS; i++) {
+        temp[i].key = *leaf_node_key(old_page, i);
+        deserialize_row(leaf_node_value(old_page, i), &temp[i].row);
+    }
+    //insert the new key into the correct position
+    uint32_t i = LEAF_NODE_MAX_CELLS;
+    while (i > 0 && temp[i - 1].key > new_key) {
+        temp[i] = temp[i - 1];
+        i--;
+    }
+    temp[i].key = new_key;
+    memcpy(&temp[i].row, new_row, sizeof(Row));
+
+    // All the keys are inserted we can get the promoted key
+    uint32_t mid = (LEAF_NODE_MAX_CELLS + 1) / 2;
+    NodeEntry promoted = temp[mid];
+    // create a new leaf node
+    right_child_page_num = pager->num_pages;
+    void *right_child_page = pager_get_page(pager, right_child_page_num);
+    if (right_child_page == NULL) {
+        return -1;
+    }
+    leaf_node_init(right_child_page);
+    *((uint8_t *) right_child_page + IS_ROOT_OFFSET) = 0;
+    uint32_t right_num_cells = LEAF_NODE_MAX_CELLS - mid + 1;
+    *(uint32_t *) ((uint8_t *) right_child_page + PARENT_POINTER_OFFSET) = *(uint32_t *) (
+        (uint8_t *) old_page + PARENT_POINTER_OFFSET);
+
+    //copy all the right cells to the new leaf
+    for (uint32_t index = 0; index < right_num_cells; index++) {
+        *leaf_node_key(right_child_page, index) = temp[mid + index].key;
+        serialize_row(&temp[mid + index].row, leaf_node_value(right_child_page, index));
+        *leaf_node_num_cells(right_child_page) = *leaf_node_num_cells(right_child_page) + 1;
+    }
+
+
+    // If it is a root and a leaf
+    if (*((uint8_t *) old_page + IS_ROOT_OFFSET) == 1) {
+        left_child_page_num = pager->num_pages;
+        void *left_child = pager_get_page(pager, left_child_page_num);
+        if (left_child == NULL) {
+            return -1;
+        }
+        leaf_node_init(left_child);
+        *((uint8_t *) left_child + IS_ROOT_OFFSET) = 0;
+        //copy all of content of the old page to the left child page
+        for (uint32_t index = 0; index < mid; index++) {
+            *leaf_node_key(left_child, index) = temp[index].key;
+            serialize_row(&temp[index].row, leaf_node_value(left_child, index));
+        }
+        *leaf_node_num_cells(left_child) = mid;
+        *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
+        //Update the parent of the left child
+        *(uint32_t *) ((uint8_t *) left_child + PARENT_POINTER_OFFSET) = 0;
+
+        // Reset the old page which is the new root
+        memset((uint8_t*)old_page + LEAF_NODE_HEADER_SIZE, 0, LEAF_NODE_SPACE_FOR_CELLS);
+        leaf_node_init(old_page);
+        *((uint8_t *) old_page + NODE_TYPE_OFFSET) = NODE_INTERNAL;
+        *internal_node_key(old_page, 0) = promoted.key;
+        //page number of the left child
+        *internal_node_value(old_page, 0) = left_child_page_num;
+        *internal_node_num_cells(old_page) = 1;
+        *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
+        *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_child_page_num;
+        return COMMAND_SUCCESS;
+    }
+
+    //if the node in old page is a leaf but not a node, reset the old page and leave the left half + insert the
+    //promoted key in parent of the node page which is an internal node
+    left_child_page_num = old_page_num;
+    memset((uint8_t*)old_page + LEAF_NODE_HEADER_SIZE, 0, LEAF_NODE_SPACE_FOR_CELLS);
+    *leaf_node_num_cells(old_page) = mid;
+    for (uint32_t index = 0; index < mid; index++) {
+        *leaf_node_key(old_page, index) = temp[index].key;
+        serialize_row(&temp[index].row, leaf_node_value(old_page, index));
+    }
+
+    uint32_t parent_page_num = *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+
+    //in case there is more than one leaf
+    // Leaf A (page 5) --next_leaf--> Leaf B (page 3) --next_leaf--> Leaf C (page 7) --next_leaf--> 0
+    //old page is Leaf B
+    uint32_t old_next_leaf = *(uint32_t *) ((uint8_t *) old_page + NEXT_LEAF_OFFSET); // save 7, before it's gone
+    *(uint32_t *) ((uint8_t *) right_child_page + NEXT_LEAF_OFFSET) = old_next_leaf; // right_child now points at C
+    *(uint32_t *) ((uint8_t *) old_page + NEXT_LEAF_OFFSET) = right_child_page_num;
+    // old_page now points at right_child
+    //insert the seperator key inside the parent node
+    void *parent_page = pager_get_page(pager, parent_page_num);
+    if (parent_page == NULL) {
+        return -1;
+    }
+    uint32_t cell_num = internal_node_find(parent_page, promoted.key);
+    if (internal_node_insert(parent_page, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
+        INTERNAL_NODE_FULL_ERROR) {
+        //TODO: split internal node
+    }
+
+    return COMMAND_SUCCESS;
 }

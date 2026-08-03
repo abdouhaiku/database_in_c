@@ -23,6 +23,16 @@
 #define LEAF_NODE_SPACE_FOR_CELLS (PAGE_SIZE - LEAF_NODE_HEADER_SIZE) // 4082
 #define LEAF_NODE_MAX_CELLS      (LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE) // 13
 
+// Internal keys offsets + size
+#define INTERNAL_NODE_NUM_KEYS_OFFSET 6  // uint32_t, 4 bytes long same as NUM_CELLS_OFFSET
+#define INTERNAL_NODE_RIGHT_CHILD_OFFSET 10 // uint32_t, 4 bytes long same as NEXNEXT_LEAF_OFFSET
+#define INTERNAL_NODE_HEADER_SIZE 14
+#define INTERNAL_NODE_CHILD_SIZE 4   // uint32_t, the size of the page number
+#define INTERNAL_NODE_KEY_SIZE 8    //uint64_t, the size of the seperator key
+#define INTERNAL_NODE_CELL_SIZE (INTERNAL_NODE_CHILD_SIZE + INTERNAL_NODE_KEY_SIZE) // 12
+#define INTERNAL_NODE_SPACE_FOR_CELLS (PAGE_SIZE - INTERNAL_NODE_HEADER_SIZE) //4082
+#define INTERNAL_NODE_MAX_KEYS (INTERNAL_NODE_SPACE_FOR_CELLS / INTERNAL_NODE_CELL_SIZE) //340
+
 typedef enum {
     NODE_LEAF,
     NODE_INTERNAL
@@ -30,11 +40,39 @@ typedef enum {
 
 
 void leaf_node_init(void *page);
+
 uint32_t *leaf_node_num_cells(void *page);
+
 uint8_t *leaf_node_cell(void *page, uint32_t cell_num);
+
 int64_t *leaf_node_key(void *page, uint32_t cell_num);
+
 uint8_t *leaf_node_value(void *page, uint32_t cell_num);
+
 uint32_t leaf_node_find(void *page, int64_t key);
+
+// return the index where the node exist or the node where the key should be inserted
 CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row);
+
 void debug_leaf_node(void *page);
+
+// internal node accessors
+void internal_node_init(void *page, int is_root);
+uint32_t *internal_node_num_cells(void *page);
+
+uint8_t *internal_node_cell(void *page, uint32_t cell_num);
+
+int64_t *internal_node_key(void *page, uint32_t cell_num);
+
+uint32_t *internal_node_value(void *page, uint32_t cell_num);
+
+uint32_t internal_node_find(void *page, int64_t key);
+
+CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, uint32_t left_child_page_num,
+                                   uint32_t right_child_page_num);
+
+CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row);
+
+CommandResult split_internal_node(Pager *pager, void *old_page, int64_t new_key,
+                                  uint32_t left_child_page_num, uint32_t right_child_page_num);
 #endif //DATABASE_IN_C_BTREE_H

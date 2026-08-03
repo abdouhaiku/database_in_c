@@ -16,6 +16,7 @@ typedef struct {
     uint32_t file_length;
     void *pages[TABLES_MAX_PAGES];
     bool page_dirty[TABLES_MAX_PAGES];
+    uint64_t num_pages;
 } Pager;
 
 Pager *pager_open(const char *filename);
