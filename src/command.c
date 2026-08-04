@@ -3,7 +3,9 @@
 
 #include "command.h"
 
+#include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "btree.h"
@@ -67,10 +69,20 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
         return insert_command(tokens, table, total_tokens);
     }
 
-    // select takes no arguments
-    if (total_tokens > 1) {
+    // select takes either no arguments (select all) or one id to look up
+    if (total_tokens > 2) {
         printf("Too many arguments to select!\n");
         return COMMAND_SUCCESS;
+    }
+    if (total_tokens == 2) {
+        errno = 0;
+        char *endptr;
+        long key = strtol(tokens[1], &endptr, 10);
+        if (errno != 0 || *endptr != '\0') {
+            printf("Invalid id: '%s'\n", tokens[1]);
+            return COMMAND_SUCCESS;
+        }
+        return select_by_id(table, key);
     }
     return select_all_command(table);
 }

@@ -162,9 +162,8 @@ uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_
     return curr;
 }
 
-CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, uint32_t left_child_page_num,
-                                   uint32_t right_child_page_num) {
-    //TODO
+CommandResult internal_node_insert(Pager *pager, void *page, uint32_t page_num, uint32_t cell_num, int64_t key,
+                                   uint32_t left_child_page_num, uint32_t right_child_page_num) {
     if (*internal_node_num_cells(page) >= INTERNAL_NODE_MAX_KEYS) {
         return INTERNAL_NODE_FULL_ERROR;
     }
@@ -180,6 +179,7 @@ CommandResult internal_node_insert(void *page, uint32_t cell_num, int64_t key, u
 
     *internal_node_key(page, cell_num) = key;
     *internal_node_value(page, cell_num) = left_child_page_num;
+    pager_mark_dirty(pager, page_num);
     return COMMAND_SUCCESS;
 }
 
@@ -330,7 +330,7 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     pager_mark_dirty(pager, right_internal_page_num);
 
     uint32_t new_cell_num = internal_node_find(parent_page, promoted);
-    if (internal_node_insert(parent_page, new_cell_num, promoted, old_page_num, right_internal_page_num) ==
+    if (internal_node_insert(pager, parent_page, *parent_page_num, new_cell_num, promoted, old_page_num, right_internal_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
             return split_internal_node(pager, parent_page, *parent_page_num, promoted, left_internal_page_num, right_internal_page_num);
         }
@@ -447,7 +447,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         return -1;
     }
     uint32_t cell_num = internal_node_find(parent_page, promoted.key);
-    if (internal_node_insert(parent_page, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
+    if (internal_node_insert(pager, parent_page, parent_page_num, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
         return split_internal_node(pager, parent_page, parent_page_num,
             promoted.key, left_child_page_num, right_child_page_num);
