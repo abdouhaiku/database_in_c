@@ -84,11 +84,22 @@ CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const
 }
 
 
-void debug_leaf_node(void *page) {
-    uint32_t num_cells = *leaf_node_num_cells(page);
-    printf("Leaf ( size %u)\n", num_cells);
-    for (uint32_t i = 0; i < num_cells; i++) {
-        printf("- %lld\n", *leaf_node_key(page, i));
+void debug_leaf_node(void *page, Table* table) {
+    // Search for the first leaf, and keep visiting the next leaf
+    void *curr = page;
+    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
+    }
+    // curr is the first leaf
+    int i = 1;
+    while (curr != NULL) {
+        uint32_t num_cells = *leaf_node_num_cells(curr);
+        printf("Leaf %d ( size %u)\n", i, num_cells);
+        for (uint32_t i = 0; i < num_cells; i++) {
+            printf("- %lld\n", *leaf_node_key(curr, i));
+        }
+        i++;
+        curr = pager_get_page(table->pager, *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET));
     }
 }
 
@@ -130,8 +141,9 @@ uint32_t internal_node_find(void *page, int64_t key) {
     return low;
 }
 
-uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key) {
+uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num) {
     uint8_t *curr = page; // page is the root node
+    *out_page_num = 0;
     while (*(curr + NODE_TYPE_OFFSET) != NODE_LEAF) {
         uint32_t num_cells = *internal_node_num_cells(curr);
         uint32_t i = num_cells;
@@ -139,6 +151,7 @@ uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key) {
             i--;
         } //Get the associated page from the cell_num=i
         uint32_t child_page_num = *internal_node_value(curr, i);
+        *out_page_num = child_page_num;
         curr = (uint8_t *) pager_get_page(pager, child_page_num);
         if (curr == NULL) {
             return NULL;

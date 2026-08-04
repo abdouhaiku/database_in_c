@@ -72,13 +72,16 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
         row.id = result;
         printf("Value = %ld\n", result);
     }
+    
+    uint32_t leaf_page_num;
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,0), row.id, &leaf_page_num);
 
-    void *page = pager_get_page(table->pager, 0);   // for now the one leaf always lives at page 0
-    if (page == NULL) {
+    if (leaf_page == NULL) {
+        printf("Could not get the leaf page\n");
         return -1;
     }
-    uint32_t cell_num = leaf_node_find(page, row.id);
-    if (cell_num < *leaf_node_num_cells(page) && *leaf_node_key(page, cell_num) == row.id) {
+    uint32_t cell_num = leaf_node_find(leaf_page, row.id);
+    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) == row.id) {
         printf("Id %ld is duplicated\n", row.id);
         return ID_DUPLICATE_ERROR;
     }
@@ -96,9 +99,13 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     }
     strncpy(row.email, tokens[3], sizeof(row.email));
     row.email[sizeof(row.email) - 1] = '\0';
-    CommandResult insert_result = leaf_node_insert(page, cell_num, row.id, &row);
+    // get the leaf node
+    CommandResult insert_result = leaf_node_insert(leaf_page, cell_num, row.id, &row);
     if (insert_result == LEAF_FULL_ERROR) {
-        printf("Error: leaf node full, cannot insert\n");
+        insert_result= split_leaf_node(table->pager, leaf_page, leaf_page_num, row.id, &row);
+    }
+    if (insert_result != COMMAND_SUCCESS) {
+        printf("Error: cannot insert\n");
         return insert_result;
     }
     pager_mark_dirty(table->pager, 0);
@@ -118,7 +125,19 @@ CommandResult select_all_command(Table *table) {
     }
     return COMMAND_SUCCESS;
 }
-
+CommandResult select_by_id(Table *table, int64_t key) {
+    uint32_t *out_page_num = 0;
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, 0), key, out_page_num);
+    uint32_t cell_num = leaf_node_find(leaf_page, key);
+    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) != key) {
+        printf("No ID matches this key %ld", key);
+        return -1;
+    }
+    Row row;
+    deserialize_row(leaf_node_value(leaf_page, cell_num), &row);
+    printf("Row that matches the ID %ld is : %s, %s\n", row.id, row.username, row.email);
+    return COMMAND_SUCCESS;
+}
 void serialize_row(const Row *row, uint8_t *destination) {
     memcpy(destination, &row->id, 8);
     memcpy(destination + 8, row->username, 25);

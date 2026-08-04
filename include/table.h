@@ -22,6 +22,7 @@ typedef struct {
 CommandResult insert_command(char **tokens, Table *table, int total_tokens);
 
 CommandResult select_all_command(Table *table);
+CommandResult select_by_id(Table *table, int64_t key);
 
 Table *table_open(const char *filename);
 void   table_close(Table *table);

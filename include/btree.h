@@ -54,7 +54,7 @@ uint32_t leaf_node_find(void *page, int64_t key);
 // return the index where the node exist or the node where the key should be inserted
 CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row);
 
-void debug_leaf_node(void *page);
+void debug_leaf_node(void *page, Table* table);
 
 // internal node accessors
 void internal_node_init(void *page, int is_root);
@@ -75,4 +75,6 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
 
 CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);
+
+uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num);
 #endif //DATABASE_IN_C_BTREE_H

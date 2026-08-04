@@ -20,7 +20,7 @@ CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
             printf("Error reading leaf node\n");
             return DEBUG_BTREE_SUCCESS;
         }
-        debug_leaf_node(page);
+        debug_leaf_node(page, table);
         return DEBUG_BTREE_SUCCESS;
     }
 
