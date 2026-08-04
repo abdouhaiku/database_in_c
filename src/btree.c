@@ -196,12 +196,62 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     temp_children[cell_num] = left_child_page_num;
     temp_children[cell_num + 1] = right_child_page_num;
 
-    // Now divide by 2
-    // Get a page from the pager
+    uint32_t mid = INTERNAL_NODE_MAX_KEYS / 2;
+    int64_t promoted = temp_keys[mid];
 
-    //TODO : handle the case where this is a root
     if (*((uint8_t*)old_page + IS_ROOT_OFFSET) == 1) {
+        // old_page stays root forever, it can't become a child of anything, so
+        // both halves need brand-new pages, and old_page itself gets rewritten as the new root.
+        uint32_t left_internal_page_num = pager->num_pages;
+        void *left_internal_page = pager_get_page(pager, left_internal_page_num);
+        if (left_internal_page == NULL) {
+            return -1;
+        }
+        uint32_t right_internal_page_num = pager->num_pages;
+        void *right_internal_page = pager_get_page(pager, right_internal_page_num);
+        if (right_internal_page == NULL) {
+            return -1;
+        }
+        internal_node_init(left_internal_page, 0);
+        internal_node_init(right_internal_page, 0);
 
+        for (uint32_t i = 0; i < mid; i++) {
+            *internal_node_key(left_internal_page, i) = temp_keys[i];
+            *internal_node_value(left_internal_page, i) = temp_children[i];
+        }
+        for (uint32_t i = 0; i < INTERNAL_NODE_MAX_KEYS - mid; i++) {
+            *internal_node_key(right_internal_page, i) = temp_keys[mid + 1 + i];
+            *internal_node_value(right_internal_page, i) = temp_children[mid + 1 + i];
+        }
+
+        *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[mid];
+        *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[INTERNAL_NODE_MAX_KEYS + 1];
+        *internal_node_num_cells(left_internal_page) = mid;
+        *internal_node_num_cells(right_internal_page) = INTERNAL_NODE_MAX_KEYS - mid;
+        *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = old_page_num;
+        *(uint32_t *) ((uint8_t *) right_internal_page + PARENT_POINTER_OFFSET) = old_page_num;
+
+        // old_page is becoming the parent of BOTH halves now (it wasn't the parent of either
+        // before it was the whole node), so every one of its old children needs its parent
+        // pointer updated, not just the ones that moved to the right side.
+        for (uint32_t j = 0; j <= INTERNAL_NODE_MAX_KEYS + 1; j++) {
+            void *moved_child = pager_get_page(pager, temp_children[j]);
+            if (moved_child == NULL) {
+                return -1;
+            }
+            uint32_t new_parent = (j <= mid) ? left_internal_page_num : right_internal_page_num;
+            *(uint32_t *) ((uint8_t *) moved_child + PARENT_POINTER_OFFSET) = new_parent;
+        }
+
+        // Rewrite old_page itself as the new internal root, pointing at both new children
+        memset((uint8_t *) old_page + INTERNAL_NODE_HEADER_SIZE, 0, INTERNAL_NODE_SPACE_FOR_CELLS);
+        internal_node_init(old_page, 1);
+        *internal_node_key(old_page, 0) = promoted;
+        *internal_node_value(old_page, 0) = left_internal_page_num;
+        *internal_node_num_cells(old_page) = 1;
+        *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_internal_page_num;
+
+        return COMMAND_SUCCESS;
     }
 
     uint32_t* parent_page_num = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
@@ -219,7 +269,6 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     uint32_t left_internal_page_num = old_page_num;
     internal_node_init(right_internal_page, 0);
     internal_node_init(left_internal_page, 0);
-    uint32_t mid = INTERNAL_NODE_MAX_KEYS / 2;
     // Left gets temp[0 .. mid-1] mid entries, same indices as temp itself
     for (uint32_t i = 0; i < mid; i++) {
         *internal_node_key(left_internal_page, i) = temp_keys[i];
@@ -252,7 +301,6 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = *parent_page_num;
     *internal_node_num_cells(left_internal_page) = mid;
     *internal_node_num_cells(right_internal_page) = INTERNAL_NODE_MAX_KEYS - mid;
-    int64_t promoted = temp_keys[mid];
 
     void *parent_page = pager_get_page(pager, *parent_page_num);
     if (parent_page == NULL) {
