@@ -52,7 +52,7 @@ uint8_t *leaf_node_value(void *page, uint32_t cell_num);
 uint32_t leaf_node_find(void *page, int64_t key);
 
 // return the index where the node exist or the node where the key should be inserted
-CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row);
+CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key, const Row *row);
 
 void debug_leaf_node(void *page, Table* table);
 

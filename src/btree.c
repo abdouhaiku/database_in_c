@@ -64,7 +64,7 @@ uint32_t leaf_node_find(void *page, int64_t key) {
     return low;
 }
 
-CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const Row *row) {
+CommandResult leaf_node_insert(Table *table,void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key, const Row *row) {
     if (*leaf_node_num_cells(page) >= LEAF_NODE_MAX_CELLS) {
         return LEAF_FULL_ERROR;
     }
@@ -79,6 +79,8 @@ CommandResult leaf_node_insert(void *page, uint32_t cell_num, int64_t key, const
 
     serialize_row(row, leaf_node_value(page, cell_num));
     *leaf_node_num_cells(page) = num_cells + 1;
+    //mark the page as dirty
+    pager_mark_dirty(table->pager, leaf_page_num);
 
     return COMMAND_SUCCESS;
 }
@@ -264,6 +266,10 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
         *internal_node_num_cells(old_page) = 1;
         *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_internal_page_num;
 
+        // mark the new right/left + root dirty
+        pager_mark_dirty(pager, left_internal_page_num);
+        pager_mark_dirty(pager, right_internal_page_num);
+        pager_mark_dirty(pager, old_page_num);
         return COMMAND_SUCCESS;
     }
 
@@ -319,6 +325,10 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     if (parent_page == NULL) {
         return -1;
     }
+    //mark all the pages left+right dirty
+    pager_mark_dirty(pager, left_internal_page_num);
+    pager_mark_dirty(pager, right_internal_page_num);
+
     uint32_t new_cell_num = internal_node_find(parent_page, promoted);
     if (internal_node_insert(parent_page, new_cell_num, promoted, old_page_num, right_internal_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
@@ -375,6 +385,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         serialize_row(&temp[mid + index].row, leaf_node_value(right_child_page, index));
         *leaf_node_num_cells(right_child_page) = *leaf_node_num_cells(right_child_page) + 1;
     }
+    pager_mark_dirty(pager, right_child_page_num);
 
 
     // If it is a root and a leaf
@@ -395,6 +406,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         //Update the parent of the left child
         *(uint32_t *) ((uint8_t *) left_child + PARENT_POINTER_OFFSET) = 0;
+        pager_mark_dirty(pager, left_child_page_num);
 
         // Reset the old page which is the new root
         memset((uint8_t*)old_page + LEAF_NODE_HEADER_SIZE, 0, LEAF_NODE_SPACE_FOR_CELLS);
@@ -406,6 +418,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *internal_node_num_cells(old_page) = 1;
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_child_page_num;
+        pager_mark_dirty(pager, old_page_num);
         return COMMAND_SUCCESS;
     }
 
@@ -418,7 +431,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *leaf_node_key(old_page, index) = temp[index].key;
         serialize_row(&temp[index].row, leaf_node_value(old_page, index));
     }
-
+    pager_mark_dirty(pager, left_child_page_num);
     uint32_t parent_page_num = *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
 
     //in case there is more than one leaf
@@ -436,7 +449,8 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
     uint32_t cell_num = internal_node_find(parent_page, promoted.key);
     if (internal_node_insert(parent_page, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
-        //TODO: split internal node
+        return split_internal_node(pager, parent_page, parent_page_num,
+            promoted.key, left_child_page_num, right_child_page_num);
     }
 
     return COMMAND_SUCCESS;

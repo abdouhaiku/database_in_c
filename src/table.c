@@ -100,7 +100,7 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
     strncpy(row.email, tokens[3], sizeof(row.email));
     row.email[sizeof(row.email) - 1] = '\0';
     // get the leaf node
-    CommandResult insert_result = leaf_node_insert(leaf_page, cell_num, row.id, &row);
+    CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, row.id, &row);
     if (insert_result == LEAF_FULL_ERROR) {
         insert_result= split_leaf_node(table->pager, leaf_page, leaf_page_num, row.id, &row);
     }
@@ -108,7 +108,7 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
         printf("Error: cannot insert\n");
         return insert_result;
     }
-    pager_mark_dirty(table->pager, 0);
+    //pager_mark_dirty(table->pager, 0);
     return COMMAND_SUCCESS;
 }
 
@@ -126,10 +126,10 @@ CommandResult select_all_command(Table *table) {
     return COMMAND_SUCCESS;
 }
 CommandResult select_by_id(Table *table, int64_t key) {
-    uint32_t *out_page_num = 0;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, 0), key, out_page_num);
+    uint32_t out_page_num;
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, 0), key, &out_page_num);
     uint32_t cell_num = leaf_node_find(leaf_page, key);
-    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) != key) {
+    if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
         printf("No ID matches this key %ld", key);
         return -1;
     }
