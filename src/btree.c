@@ -376,8 +376,10 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
     leaf_node_init(right_child_page);
     *((uint8_t *) right_child_page + IS_ROOT_OFFSET) = 0;
     uint32_t right_num_cells = LEAF_NODE_MAX_CELLS - mid + 1;
-    *(uint32_t *) ((uint8_t *) right_child_page + PARENT_POINTER_OFFSET) = *(uint32_t *) (
-        (uint8_t *) old_page + PARENT_POINTER_OFFSET);
+    int is_root_split = *((uint8_t *) old_page + IS_ROOT_OFFSET) == 1;
+    *(uint32_t *) ((uint8_t *) right_child_page + PARENT_POINTER_OFFSET) = is_root_split
+        ? old_page_num
+        : *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
 
     //copy all the right cells to the new leaf
     for (uint32_t index = 0; index < right_num_cells; index++) {
