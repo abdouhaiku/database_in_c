@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#define TABLES_MAX_PAGES 100
+#define TABLES_MAX_PAGES 20000
 #define PAGE_SIZE 4096
 
 

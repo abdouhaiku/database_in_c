@@ -101,7 +101,9 @@ void debug_leaf_node(void *page, Table* table) {
             printf("- %lld\n", *leaf_node_key(curr, i));
         }
         i++;
-        curr = pager_get_page(table->pager, *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET));
+        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) break;
+        curr = pager_get_page(table->pager, next_leaf_num);
     }
 }
 
@@ -152,7 +154,9 @@ uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_
         while (i > 0 && *internal_node_key(curr, i - 1) > key) {
             i--;
         } //Get the associated page from the cell_num=i
-        uint32_t child_page_num = *internal_node_value(curr, i);
+        uint32_t child_page_num = (i == num_cells)
+            ? *(uint32_t *) ((uint8_t *) curr + INTERNAL_NODE_RIGHT_CHILD_OFFSET)
+            : *internal_node_value(curr, i);
         *out_page_num = child_page_num;
         curr = (uint8_t *) pager_get_page(pager, child_page_num);
         if (curr == NULL) {
@@ -175,10 +179,17 @@ CommandResult internal_node_insert(Pager *pager, void *page, uint32_t page_num, 
             internal_node_cell(page, cell_num),
             (num_cells - cell_num) * INTERNAL_NODE_CELL_SIZE);
 
-    *internal_node_value(page, cell_num + 1) = right_child_page_num;
+    if (cell_num == num_cells) {
+        // Inserting past every existing key: the new right child becomes the node's
+        // new rightmost child, replacing what RIGHT_CHILD_OFFSET used to hold.
+        *(uint32_t *) ((uint8_t *) page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_child_page_num;
+    } else {
+        *internal_node_value(page, cell_num + 1) = right_child_page_num;
+    }
 
     *internal_node_key(page, cell_num) = key;
     *internal_node_value(page, cell_num) = left_child_page_num;
+    *internal_node_num_cells(page) = num_cells + 1;
     pager_mark_dirty(pager, page_num);
     return COMMAND_SUCCESS;
 }

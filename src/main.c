@@ -22,7 +22,9 @@ int main(void) {
 
         if (read_input(input_buffer) != 0) {
             printf("\n");
-            break;
+            close_input_buffer(input_buffer);
+            table_close(table);
+            return EXIT_SUCCESS;
         }
 
         if (input_buffer->input_length == 0) {
@@ -51,7 +53,4 @@ int main(void) {
             printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
         }
     }
-
-    close_input_buffer(input_buffer);
-    return EXIT_SUCCESS;
 }
