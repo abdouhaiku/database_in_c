@@ -113,16 +113,29 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
 }
 
 CommandResult select_all_command(Table *table) {
-    void *page = pager_get_page(table->pager, 0);   // for now the one leaf lives at page 0
-    if (page == NULL) {
+    // Find the first leaf
+    void *curr = pager_get_page(table->pager, 0);
+    if (curr == NULL) {
         return -1;
     }
-    uint32_t num_cells = *leaf_node_num_cells(page);
-    for (uint32_t i = 0; i < num_cells; i++) {
-        Row row;
-        deserialize_row(leaf_node_value(page, i), &row);
-        printf("Row %u : %ld, %s, %s\n", i, row.id, row.username, row.email);
+    uint32_t current_count = 0;
+    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
     }
+    // curr is the first leaf node page
+    while (curr != NULL) {
+        uint32_t num_cells = *leaf_node_num_cells(curr);
+        for (uint32_t i = 0; i< num_cells; i++) {
+            Row row;
+            deserialize_row(leaf_node_value(curr, i), &row);
+            printf("Row %u : %ld, %s, %s\n", current_count, row.id, row.username, row.email);
+            current_count++;
+        }
+        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) break;
+        curr = pager_get_page(table->pager, next_leaf_num);
+    }
+
     return COMMAND_SUCCESS;
 }
 CommandResult select_by_id(Table *table, int64_t key) {
