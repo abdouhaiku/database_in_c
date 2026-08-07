@@ -13,6 +13,8 @@ add_executable(database_in_c
         src/pager.c
         include/btree.h
         src/btree.c
+        include/ast.h
+        src/lexer.c
 )
 target_include_directories(database_in_c PRIVATE include)
 
