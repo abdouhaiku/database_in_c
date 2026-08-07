@@ -37,7 +37,27 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
         return;
     }
 
-    
-    out_token->type = TOKEN_INVALID;
+    switch (*tokenizer->cursor) {
+        case ',':
+            out_token->type = TOKEN_COMMA;
+            break;
+        case ';':
+            out_token->type = TOKEN_SEMICOLON;
+            break;
+        case '(':
+            out_token->type = TOKEN_LPAREN;
+            break;
+        case ')':
+            out_token->type = TOKEN_RPAREN;
+            break;
+        case '=':
+            out_token->type = TOKEN_EQUAL;
+            break;
+        default:
+            out_token->type = TOKEN_INVALID;
+            break;
+    }
     out_token->text_length = 1;
+    tokenizer->cursor++;
+    tokenizer->column++;
 }
