@@ -2,7 +2,22 @@
 // Created by Abdou on 07/08/2026.
 //
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "ast.h"
+
+int is_digits(const char *str, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (!isdigit((unsigned char)str[i])) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
 
 void tokenizer_init(Tokenizer *t, const char *sql) {
     t->text = sql;
@@ -12,6 +27,7 @@ void tokenizer_init(Tokenizer *t, const char *sql) {
 }
 
 void get_next_token(Tokenizer *tokenizer, Token *out_token) {
+    out_token->type = TOKEN_NONE;
     while (*tokenizer->cursor &&
            (*tokenizer->cursor == ' ' || *tokenizer->cursor == '\t' ||
             *tokenizer->cursor == '\r' || *tokenizer->cursor == '\n')) {
@@ -53,11 +69,48 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
         case '=':
             out_token->type = TOKEN_EQUAL;
             break;
-        default:
-            out_token->type = TOKEN_INVALID;
-            break;
     }
-    out_token->text_length = 1;
-    tokenizer->cursor++;
-    tokenizer->column++;
+    if (out_token->type != TOKEN_NONE) {
+        out_token->text_length = 1;
+        tokenizer->cursor++;
+        tokenizer->column++;
+        return;
+    }
+
+    //if non of these cases applies
+    char* c = tokenizer->cursor;
+    while (isalnum(*c) || *c =='_') {
+        //advance c
+        c++;
+    }
+    out_token->text_length = c - tokenizer->cursor;
+    out_token->text = tokenizer->cursor;
+    tokenizer->cursor = tokenizer->cursor + out_token->text_length;
+
+    if (strncasecmp(out_token->text, "SELECT", out_token->text_length) == 0) {
+        out_token->type = TOKEN_SELECT;
+    }
+    else if (strncasecmp(out_token->text, "FROM", out_token->text_length) == 0) {
+        out_token->type = TOKEN_FROM;
+    }
+    else if (strncasecmp(out_token->text, "WHERE", out_token->text_length) == 0) {
+        out_token->type = TOKEN_WHERE;
+    }
+    else if (strncasecmp(out_token->text, "INSERT", out_token->text_length) == 0) {
+        out_token->type = TOKEN_INSERT;
+    }
+    else if (strncasecmp(out_token->text, "INTO", out_token->text_length) == 0) {
+        out_token->type = TOKEN_INTO;
+    }
+    else if (strncasecmp(out_token->text, "VALUES", out_token->text_length) == 0) {
+        out_token->type = TOKEN_VALUE;
+    }
+    else if (is_digits(out_token->text, out_token->text_length)) {
+        out_token->type = TOKEN_INTEGER;
+        char temp[out_token->text_length + 1];
+        memcpy(temp, out_token->text, out_token->text_length);
+        temp[out_token->text_length] = '\0';
+        long value = strtol(temp, NULL, 10);
+        out_token->int_value = value;
+    }
 }
