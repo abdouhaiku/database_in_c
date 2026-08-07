@@ -78,7 +78,7 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     }
 
     //if non of these cases applies
-    char* c = tokenizer->cursor;
+    const char* c = tokenizer->cursor;
     while (isalnum(*c) || *c =='_') {
         //advance c
         c++;
@@ -87,22 +87,25 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     out_token->text = tokenizer->cursor;
     tokenizer->cursor = tokenizer->cursor + out_token->text_length;
 
-    if (strncasecmp(out_token->text, "SELECT", out_token->text_length) == 0) {
+#define IS_KEYWORD(kw) \
+    (out_token->text_length == strlen(kw) && strncasecmp(out_token->text, kw, out_token->text_length) == 0)
+
+    if (IS_KEYWORD("SELECT")) {
         out_token->type = TOKEN_SELECT;
     }
-    else if (strncasecmp(out_token->text, "FROM", out_token->text_length) == 0) {
+    else if (IS_KEYWORD("FROM")) {
         out_token->type = TOKEN_FROM;
     }
-    else if (strncasecmp(out_token->text, "WHERE", out_token->text_length) == 0) {
+    else if (IS_KEYWORD("WHERE")) {
         out_token->type = TOKEN_WHERE;
     }
-    else if (strncasecmp(out_token->text, "INSERT", out_token->text_length) == 0) {
+    else if (IS_KEYWORD("INSERT")) {
         out_token->type = TOKEN_INSERT;
     }
-    else if (strncasecmp(out_token->text, "INTO", out_token->text_length) == 0) {
+    else if (IS_KEYWORD("INTO")) {
         out_token->type = TOKEN_INTO;
     }
-    else if (strncasecmp(out_token->text, "VALUES", out_token->text_length) == 0) {
+    else if (IS_KEYWORD("VALUES")) {
         out_token->type = TOKEN_VALUE;
     }
     else if (is_digits(out_token->text, out_token->text_length)) {
@@ -113,4 +116,9 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
         long value = strtol(temp, NULL, 10);
         out_token->int_value = value;
     }
+    else {
+        out_token->type = TOKEN_IDENTIFIER;
+    }
+
+#undef IS_KEYWORD
 }
