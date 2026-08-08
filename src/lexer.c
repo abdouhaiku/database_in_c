@@ -79,13 +79,30 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
 
     //if non of these cases applies
     const char* c = tokenizer->cursor;
-    while (isalnum(*c) || *c =='_') {
-        //advance c
-        c++;
+    // Case 1: Handle string literals
+    if (*c == '\'') {
+        c++; 
+        while (*c != '\'' && isalnum(*c)) {
+            c++;
+        }
+        //end of the loop we get the text from cursor +1 to c -1
+        out_token->text_length = (c-1) - (tokenizer->cursor + 1);
+        out_token->text = tokenizer->cursor + 1;
+        tokenizer->cursor = tokenizer->cursor + out_token->text_length + 2;
+
     }
-    out_token->text_length = c - tokenizer->cursor;
-    out_token->text = tokenizer->cursor;
-    tokenizer->cursor = tokenizer->cursor + out_token->text_length;
+
+    else {
+        // Handle integer literals
+        while (isalnum(*c) || *c =='_' ) {
+            //advance c
+            c++;
+        }
+        out_token->text_length = c - tokenizer->cursor;
+        out_token->text = tokenizer->cursor;
+        tokenizer->cursor = tokenizer->cursor + out_token->text_length;
+
+    }
 
 #define IS_KEYWORD(kw) \
     (out_token->text_length == strlen(kw) && strncasecmp(out_token->text, kw, out_token->text_length) == 0)
@@ -115,6 +132,9 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
         temp[out_token->text_length] = '\0';
         long value = strtol(temp, NULL, 10);
         out_token->int_value = value;
+    }
+    else if () {
+
     }
     else {
         out_token->type = TOKEN_IDENTIFIER;
