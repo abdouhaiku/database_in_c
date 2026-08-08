@@ -67,4 +67,5 @@ struct AstNode {
 
 void ast_destroy(AstNode *node);
 
+void ast_print(AstNode *node);
 #endif //DATABASE_IN_C_AST_H

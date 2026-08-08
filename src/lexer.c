@@ -214,3 +214,6 @@ void debug_tokens(char* sql) {
         printf("%s\n", token_type_name(&out_token));
     }
 }
+
+
+
