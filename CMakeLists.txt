@@ -16,6 +16,8 @@ add_executable(database_in_c
         include/ast.h
         src/lexer.c
         src/ast.c
+        include/parser.h
+        src/parser.c
 )
 target_include_directories(database_in_c PRIVATE include)
 
