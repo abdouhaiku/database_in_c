@@ -15,6 +15,7 @@ add_executable(database_in_c
         src/btree.c
         include/ast.h
         src/lexer.c
+        src/ast.c
 )
 target_include_directories(database_in_c PRIVATE include)
 

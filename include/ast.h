@@ -4,6 +4,7 @@
 
 #ifndef DATABASE_IN_C_AST_H
 #define DATABASE_IN_C_AST_H
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -36,4 +37,34 @@ typedef struct {
 void get_next_token(Tokenizer *tokenizer, Token *out_token);
 void tokenizer_init(Tokenizer *t, const char *sql);
 void debug_tokens(char* sql);
+
+typedef enum {
+    AST_INSERT, AST_SELECT,
+    EXPR_LITERAL_INT, EXPR_LITERAL_STRING, EXPR_COLUMN, EXPR_EQUALS
+} AstNodeType;
+
+typedef struct AstNode AstNode;
+
+struct AstNode {
+    AstNodeType type;
+    union {
+        struct { const char *table; size_t table_length;
+            int64_t id; const char *username; size_t username_length;
+            const char *email; size_t email_length; } insert;
+        struct {
+            const char *table; size_t table_length;
+            bool is_star;             // true for SELECT *
+            AstNode *columns[3];      // up to 3 column references — id/username/email are the
+            size_t column_count;      // only columns that can exist, no catalog for now
+            AstNode *where;           // nullable
+        } select;
+        int64_t literal_int;
+        struct { const char *text; size_t length; } literal_string;
+        struct { const char *name; size_t length; } column;
+        struct { AstNode *left; AstNode *right; } equals;
+    } as;
+};
+
+void ast_destroy(AstNode *node);
+
 #endif //DATABASE_IN_C_AST_H
