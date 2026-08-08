@@ -26,7 +26,7 @@ CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
         debug_leaf_node(page, table);
         return DEBUG_BTREE_SUCCESS;
     }
-    if (strncasecmp(input_buffer->buffer, ".tokens", 6) == 0) {
+    if (strncasecmp(input_buffer->buffer, ".tokens", 7) == 0) {
         char *sql_query = input_buffer->buffer + 7;
         debug_tokens(sql_query);
         return DEBUGS_TOKENS_SUCCESS;

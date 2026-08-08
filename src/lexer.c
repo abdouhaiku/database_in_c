@@ -50,8 +50,8 @@ const char* token_type_name(Token* token) {
             return buff;
         case TOKEN_INTEGER:
             snprintf(buff, sizeof(buff),
-                     "TOKEN_INTEGER(%.*d)",
-                     token->int_value);
+                     "TOKEN_INTEGER(%lld)",
+                     (long long) token->int_value);
             return buff;
         case TOKEN_STRING:
             snprintf(buff, sizeof(buff),
@@ -74,8 +74,9 @@ const char* token_type_name(Token* token) {
         case TOKEN_INVALID:
             return "TOKEN_INVALID";
         case TOKEN_NONE:
-            break;
+            return "TOKEN_NONE";
     }
+    return "TOKEN_UNKNOWN";
 }
 
 void get_next_token(Tokenizer *tokenizer, Token *out_token) {
@@ -206,10 +207,10 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
 void debug_tokens(char* sql) {
     Token out_token;
     memset(&out_token, 0, sizeof(Token));
-    Tokenizer *tokenizer;
-    tokenizer_init(tokenizer, sql);
+    Tokenizer tokenizer;
+    tokenizer_init(&tokenizer, sql);
     while (out_token.type != TOKEN_EOF) {
-        get_next_token(tokenizer, &out_token);
+        get_next_token(&tokenizer, &out_token);
         printf("%s\n", token_type_name(&out_token));
     }
 }
