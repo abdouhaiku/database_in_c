@@ -35,4 +35,5 @@ typedef struct {
 
 void get_next_token(Tokenizer *tokenizer, Token *out_token);
 void tokenizer_init(Tokenizer *t, const char *sql);
+void debug_tokens(char* sql);
 #endif //DATABASE_IN_C_AST_H

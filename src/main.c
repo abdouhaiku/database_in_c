@@ -44,6 +44,8 @@ int main(void) {
                     break;
                 case DEBUG_BTREE_SUCCESS:
                     continue;
+                case DEBUGS_TOKENS_SUCCESS:
+                    continue;
             }
         }
 

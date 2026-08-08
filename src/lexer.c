@@ -3,6 +3,7 @@
 //
 
 #include <ctype.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,6 +25,57 @@ void tokenizer_init(Tokenizer *t, const char *sql) {
     t->cursor = sql;
     t->line = 1;
     t->column = 1;
+}
+
+const char* token_type_name(Token* token) {
+    static char buff[256];
+    switch (token->type) {
+        case TOKEN_SELECT:
+            return "TOKEN_SELECT";
+        case TOKEN_FROM:
+            return "TOKEN_FROM";
+        case TOKEN_WHERE:
+            return "TOKEN_WHERE";
+        case TOKEN_INSERT:
+            return "TOKEN_INSERT";
+        case TOKEN_INTO:
+            return "TOKEN_INTO";
+        case TOKEN_VALUE:
+            return "TOKEN_VALUE";
+        case TOKEN_IDENTIFIER:
+            snprintf(buff, sizeof(buff),
+                     "TOKEN_IDENTIFIER(%.*s)",
+                     token->text_length,
+                     token->text);
+            return buff;
+        case TOKEN_INTEGER:
+            snprintf(buff, sizeof(buff),
+                     "TOKEN_INTEGER(%.*d)",
+                     token->int_value);
+            return buff;
+        case TOKEN_STRING:
+            snprintf(buff, sizeof(buff),
+                     "TOKEN_STRING(%.*s)",
+                     token->text_length,
+                     token->text);
+            return buff;
+        case TOKEN_COMMA:
+            return "TOKEN_COMMA";
+        case TOKEN_LPAREN:
+            return "TOKEN_LPAREN";
+        case TOKEN_RPAREN:
+            return "TOKEN_RPAREN";
+        case TOKEN_SEMICOLON:
+            return "TOKEN_SEMICOLON";
+        case TOKEN_EQUAL:
+            return "TOKEN_EQUAL";
+        case TOKEN_EOF:
+            return "TOKEN_EOF";
+        case TOKEN_INVALID:
+            return "TOKEN_INVALID";
+        case TOKEN_NONE:
+            break;
+    }
 }
 
 void get_next_token(Tokenizer *tokenizer, Token *out_token) {
@@ -148,4 +200,16 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     }
 
 #undef IS_KEYWORD
+}
+
+
+void debug_tokens(char* sql) {
+    Token out_token;
+    memset(&out_token, 0, sizeof(Token));
+    Tokenizer *tokenizer;
+    tokenizer_init(tokenizer, sql);
+    while (out_token.type != TOKEN_EOF) {
+        get_next_token(tokenizer, &out_token);
+        printf("%s\n", token_type_name(&out_token));
+    }
 }
