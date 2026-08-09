@@ -10,6 +10,7 @@
 #include <string.h>
 
 #include "btree.h"
+#include "parser.h"
 #include "repl.h"
 #include "table.h"
 
@@ -47,53 +48,24 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     int total_tokens = 0;
     const char *delim = " \t\n";
     char *p = input_buffer->buffer;
-    char *tokens[4];
 
-    while ((token = strsep(&p, delim)) != NULL) {
-        if (*token != '\0') {
-            total_tokens++;
-            if (total_tokens <= 4) {
-                tokens[total_tokens - 1] = token;
-                // Skip empty tokens from consecutive spaces
-                printf("Token: %s\n", token);
-            }
-        }
+    Parser parser;
+    parser_init(&parser, input_buffer->buffer);
+
+    AstNode *tree = parser.current.type == TOKEN_SELECT
+    ? parse_select_statement(&parser)
+    : parse_insert_statement(&parser);
+
+    if (tree == NULL) {
+        return -1;
     }
 
-
-    if (total_tokens < 1) {
-        printf("No command entered!\n");
-        return COMMAND_SUCCESS;
+    if (tree->type == AST_INSERT) {
+        return insert_command(tree, table);
     }
 
-    // Get first token
-    if (strcmp(tokens[0], "insert") != 0 && strcmp(tokens[0], "select") != 0) {
-        printf("Wrong command, try again!\n");
-        return UNRECOGNIZED_COMMAND;
+    // TODO: add approprite function in SELECT to handle when where is NULL + columns is not empty & when when is not NULL
+    if (tree->type == AST_SELECT && tree->as.select.is_star == true) {
+        return select_all_command(table);
     }
-
-    if (strcmp(tokens[0], "insert") == 0) {
-        if (total_tokens < 4) {
-            printf("Not enough arguments to insert!\n");
-            return COMMAND_SUCCESS;
-        }
-        return insert_command(tokens, table, total_tokens);
-    }
-
-    // select takes either no arguments (select all) or one id to look up
-    if (total_tokens > 2) {
-        printf("Too many arguments to select!\n");
-        return COMMAND_SUCCESS;
-    }
-    if (total_tokens == 2) {
-        errno = 0;
-        char *endptr;
-        long key = strtol(tokens[1], &endptr, 10);
-        if (errno != 0 || *endptr != '\0') {
-            printf("Invalid id: '%s'\n", tokens[1]);
-            return COMMAND_SUCCESS;
-        }
-        return select_by_id(table, key);
-    }
-    return select_all_command(table);
 }

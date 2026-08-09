@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#include "ast.h"
 #include "command_result.h"
 #include "pager.h"
 
@@ -19,7 +21,7 @@ typedef struct {
     Pager *pager;
 } Table;
 
-CommandResult insert_command(char **tokens, Table *table, int total_tokens);
+CommandResult insert_command(AstNode *tree, Table *table);
 
 CommandResult select_all_command(Table *table);
 CommandResult select_by_id(Table *table, int64_t key);

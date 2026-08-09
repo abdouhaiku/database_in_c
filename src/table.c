@@ -6,6 +6,8 @@
 
 #include <limits.h>
 #include <string.h>
+
+#include "ast.h"
 #include "btree.h"
 #include "pager.h"
 
@@ -49,29 +51,13 @@ Table *table_open(const char *filename) {
 }
 
 
-CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
+CommandResult insert_command(AstNode *tree, Table *table) {
     Row row;
-    if (total_tokens > 4) {
-        printf("Too many arguments to insert!\n");
-        return COMMAND_SUCCESS;
-    }
 
     errno = 0;
-    char *endptr;
-    long result = strtol(tokens[1], &endptr, 10);
-    if (errno != 0) {
-        perror("strtol");
-        return COMMAND_SUCCESS;
-    } else if (*endptr != '\0') {
-        printf("Invalid number: '%s'\n", endptr);
-        return COMMAND_SUCCESS;
-    } else if (result < INT_MIN || result > INT_MAX) {
-        printf("Value out of int range\n");
-        return COMMAND_SUCCESS;
-    } else {
-        row.id = result;
-        printf("Value = %ld\n", result);
-    }
+    long result = tree->as.insert.id;
+    row.id = result;
+    printf("Value = %ld\n", result);
     
     uint32_t leaf_page_num;
     void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,0), row.id, &leaf_page_num);
@@ -86,18 +72,18 @@ CommandResult insert_command(char **tokens, Table *table, int total_tokens) {
         return ID_DUPLICATE_ERROR;
     }
 
-    if (strlen(tokens[2]) >= sizeof(row.username)) {
+    if (strlen(tree->as.insert.username) >= sizeof(row.username)) {
         printf("Username too long\n");
         return COMMAND_SUCCESS;
     }
-    strncpy(row.username, tokens[2],
+    strncpy(row.username, tree->as.insert.username,
             sizeof(row.username) - 1);
     row.username[sizeof(row.username) - 1] = '\0';
-    if (strlen(tokens[3]) >= sizeof(row.email)) {
+    if (strlen(tree->as.insert.email) >= sizeof(row.email)) {
         printf("Email too long! \n");
         return COMMAND_SUCCESS;
     }
-    strncpy(row.email, tokens[3], sizeof(row.email));
+    strncpy(row.email, tree->as.insert.email, sizeof(row.email));
     row.email[sizeof(row.email) - 1] = '\0';
     // get the leaf node
     CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, row.id, &row);
