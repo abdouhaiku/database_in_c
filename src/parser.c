@@ -4,10 +4,19 @@
 
 #include "parser.h"
 
+#include <stdio.h>
 #include <stdlib.h>
+
+static void parser_set_error(Parser *parser, const char *expected) {
+    snprintf(parser->error, sizeof(parser->error),
+             "Parse error at line %d, column %d: expected %s, found %s",
+             parser->current.line, parser->current.column,
+             expected, token_type_name(&parser->current));
+}
 
 void parser_init(Parser *parser, const char *sql) {
     tokenizer_init(&parser->tokenizer, sql);
+    parser->error[0] = '\0';
     get_next_token(&parser->tokenizer, &parser->current);
 }
 
@@ -35,8 +44,7 @@ static AstNode *parse_primary_expression(Parser *parser) {
             node->as.column.length = parser->current.text_length;
             break;
         default:
-            // Not a literal or column reference - syntax error. Full error
-            // reporting is #41's job; for now, NULL signals "not an expression."
+            parser_set_error(parser, "a literal or column reference");
             free(node);
             return NULL;
     }
@@ -47,7 +55,7 @@ static AstNode *parse_primary_expression(Parser *parser) {
 AstNode *parse_expression(Parser *parser) {
     AstNode *left = parse_primary_expression(parser);
     if (left == NULL) {
-        return NULL;
+        return NULL; // parse_primary_expression already set the error
     }
 
     // peek at whatever parse_primary_expression's advance left us sitting on.
@@ -59,7 +67,7 @@ AstNode *parse_expression(Parser *parser) {
     AstNode *right = parse_primary_expression(parser);
     if (right == NULL) {
         ast_destroy(left);
-        return NULL;
+        return NULL; // parse_primary_expression already set the error
     }
 
     AstNode *equals = malloc(sizeof(AstNode));
@@ -71,6 +79,7 @@ AstNode *parse_expression(Parser *parser) {
 
 AstNode *parse_select_statement(Parser *parser) {
     if (parser->current.type != TOKEN_SELECT) {
+        parser_set_error(parser, "SELECT");
         return NULL;
     }
 
@@ -93,11 +102,13 @@ AstNode *parse_select_statement(Parser *parser) {
             }
             if (parser->current.type != TOKEN_IDENTIFIER) {
                 // Unexpected token where a column name or comma was expected.
+                parser_set_error(parser, "a column name or ','");
                 ast_destroy(node);
                 return NULL;
             }
             if (node->as.select.column_count >= 3) {
                 // Too many columns, only id/username/email can ever exist.
+                parser_set_error(parser, "at most 3 columns (id, username, email)");
                 ast_destroy(node);
                 return NULL;
             }
@@ -108,6 +119,7 @@ AstNode *parse_select_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_FROM) {
         // FROM is required.
+        parser_set_error(parser, "FROM");
         ast_destroy(node);
         return NULL;
     }
@@ -115,6 +127,7 @@ AstNode *parse_select_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_IDENTIFIER) {
         // Table name is required after FROM.
+        parser_set_error(parser, "a table name");
         ast_destroy(node);
         return NULL;
     }
@@ -125,6 +138,11 @@ AstNode *parse_select_statement(Parser *parser) {
     if (parser->current.type == TOKEN_WHERE) {
         parser_advance(parser); // consume WHERE itself before parsing the condition
         node->as.select.where = parse_expression(parser);
+        if (node->as.select.where == NULL) {
+            // parse_expression already set the error
+            ast_destroy(node);
+            return NULL;
+        }
     }
 
     return node;
@@ -132,6 +150,7 @@ AstNode *parse_select_statement(Parser *parser) {
 
 AstNode *parse_insert_statement(Parser *parser) {
     if (parser->current.type != TOKEN_INSERT) {
+        parser_set_error(parser, "INSERT");
         return NULL;
     }
 
@@ -142,6 +161,7 @@ AstNode *parse_insert_statement(Parser *parser) {
     // INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');
 
     if (parser->current.type != TOKEN_INTO) {
+        parser_set_error(parser, "INTO");
         ast_destroy(node);
         return NULL;
     }
@@ -149,6 +169,7 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_IDENTIFIER) {
         // Table name is required after INTO.
+        parser_set_error(parser, "a table name");
         ast_destroy(node);
         return NULL;
     }
@@ -158,6 +179,7 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_VALUE) {
         // VALUES keyword is required after the table name.
+        parser_set_error(parser, "VALUES");
         ast_destroy(node);
         return NULL;
     }
@@ -165,6 +187,7 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_LPAREN) {
         // '(' is required to start the value list.
+        parser_set_error(parser, "'('");
         ast_destroy(node);
         return NULL;
     }
@@ -178,6 +201,7 @@ AstNode *parse_insert_statement(Parser *parser) {
         }
         if (i >= 3) {
             // Too many insert values, only id/username/email can ever exist.
+            parser_set_error(parser, "at most 3 values (id, username, email)");
             ast_destroy(node);
             return NULL;
         }
@@ -185,6 +209,7 @@ AstNode *parse_insert_statement(Parser *parser) {
             case 0:
                 if (parser->current.type != TOKEN_INTEGER) {
                     // id must be an integer literal.
+                    parser_set_error(parser, "an integer literal for id");
                     ast_destroy(node);
                     return NULL;
                 }
@@ -193,6 +218,7 @@ AstNode *parse_insert_statement(Parser *parser) {
             case 1:
                 if (parser->current.type != TOKEN_STRING) {
                     // username must be a string literal.
+                    parser_set_error(parser, "a string literal for username");
                     ast_destroy(node);
                     return NULL;
                 }
@@ -202,6 +228,7 @@ AstNode *parse_insert_statement(Parser *parser) {
             case 2:
                 if (parser->current.type != TOKEN_STRING) {
                     // email must be a string literal.
+                    parser_set_error(parser, "a string literal for email");
                     ast_destroy(node);
                     return NULL;
                 }
@@ -215,6 +242,7 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_RPAREN) {
         // ')' is required to close the value list.
+        parser_set_error(parser, "')'");
         ast_destroy(node);
         return NULL;
     }

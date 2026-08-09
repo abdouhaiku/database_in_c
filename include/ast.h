@@ -36,6 +36,7 @@ typedef struct {
 
 void get_next_token(Tokenizer *tokenizer, Token *out_token);
 void tokenizer_init(Tokenizer *t, const char *sql);
+const char* token_type_name(Token *token);
 void debug_tokens(char* sql);
 void debug_ast(char *sql);
 

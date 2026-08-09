@@ -10,6 +10,7 @@
 typedef struct {
     Tokenizer tokenizer;
     Token current;
+    char error[256]; // set by the parse_* functions on failure; empty when there's no error
 } Parser;
 
 void parser_init(Parser *parser, const char *sql);

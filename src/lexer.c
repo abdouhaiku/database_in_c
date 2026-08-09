@@ -222,15 +222,16 @@ void debug_tokens(char* sql) {
 }
 
 void debug_ast(char *sql) {
-    Parser *parser = malloc(sizeof(Parser));
-    parser_init(parser, sql);
-    AstNode *tree = parse_select_statement(parser);
+    Parser parser;
+    parser_init(&parser, sql);
+
+    AstNode *tree = parse_select_statement(&parser);
     if (tree == NULL) {
-        printf("Error in parsing the SQL statement!\n");
+        printf("%s\n", parser.error);
+        return;
     }
     ast_print(tree);
     ast_destroy(tree);
-    free(parser);
 }
 
 
