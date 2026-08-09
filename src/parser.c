@@ -7,10 +7,8 @@
 #include <stdlib.h>
 
 void parser_init(Parser *parser, const char *sql) {
-    Tokenizer *tokenizer = malloc(sizeof(Tokenizer));
-    tokenizer_init(tokenizer, sql);
-    parser->tokenizer = *tokenizer;
-    get_next_token(tokenizer, &parser->current);
+    tokenizer_init(&parser->tokenizer, sql);
+    get_next_token(&parser->tokenizer, &parser->current);
 }
 
 void parser_advance(Parser *parser) {
@@ -130,3 +128,4 @@ AstNode *parse_select_statement(Parser *parser) {
 
     return node;
 }
+

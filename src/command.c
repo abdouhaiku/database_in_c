@@ -31,6 +31,11 @@ CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
         debug_tokens(sql_query);
         return DEBUGS_TOKENS_SUCCESS;
     }
+    if (strncasecmp(input_buffer->buffer, ".ast", 4) == 0) {
+        char *sql_query = input_buffer->buffer + 4;
+        debug_ast(sql_query);
+        return DEBUG_AST_SUCCESS;
+    }
 
     return UNRECOGNIZED_COMMAND;
 }

@@ -37,6 +37,7 @@ typedef struct {
 void get_next_token(Tokenizer *tokenizer, Token *out_token);
 void tokenizer_init(Tokenizer *t, const char *sql);
 void debug_tokens(char* sql);
+void debug_ast(char *sql);
 
 typedef enum {
     AST_INSERT, AST_SELECT,

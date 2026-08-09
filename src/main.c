@@ -46,6 +46,8 @@ int main(void) {
                     continue;
                 case DEBUGS_TOKENS_SUCCESS:
                     continue;
+                case DEBUG_AST_SUCCESS:
+                    continue;
             }
         }
 

@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "ast.h"
+#include "parser.h"
 
 int is_digits(const char *str, size_t len)
 {
@@ -218,6 +219,18 @@ void debug_tokens(char* sql) {
         get_next_token(&tokenizer, &out_token);
         printf("%s\n", token_type_name(&out_token));
     }
+}
+
+void debug_ast(char *sql) {
+    Parser *parser = malloc(sizeof(Parser));
+    parser_init(parser, sql);
+    AstNode *tree = parse_select_statement(parser);
+    if (tree == NULL) {
+        printf("Error in parsing the SQL statement!\n");
+    }
+    ast_print(tree);
+    ast_destroy(tree);
+    free(parser);
 }
 
 
