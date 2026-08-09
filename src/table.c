@@ -72,19 +72,18 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         return ID_DUPLICATE_ERROR;
     }
 
-    if (strlen(tree->as.insert.username) >= sizeof(row.username)) {
+    if (tree->as.insert.username_length >= sizeof(row.username)) {
         printf("Username too long\n");
         return COMMAND_SUCCESS;
     }
-    strncpy(row.username, tree->as.insert.username,
-            sizeof(row.username) - 1);
-    row.username[sizeof(row.username) - 1] = '\0';
-    if (strlen(tree->as.insert.email) >= sizeof(row.email)) {
+    memcpy(row.username, tree->as.insert.username, tree->as.insert.username_length);
+    row.username[tree->as.insert.username_length] = '\0';
+    if (tree->as.insert.email_length >= sizeof(row.email)) {
         printf("Email too long! \n");
         return COMMAND_SUCCESS;
     }
-    strncpy(row.email, tree->as.insert.email, sizeof(row.email));
-    row.email[sizeof(row.email) - 1] = '\0';
+    memcpy(row.email, tree->as.insert.email, tree->as.insert.email_length);
+    row.email[tree->as.insert.email_length] = '\0';
     // get the leaf node
     CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, row.id, &row);
     if (insert_result == LEAF_FULL_ERROR) {

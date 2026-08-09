@@ -42,13 +42,6 @@ CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
 }
 
 CommandResult process_command(InputBuffer *input_buffer, Table *table) {
-    //split by whitespace first
-    //variable to calculate the count of the tokens
-    char *token;
-    int total_tokens = 0;
-    const char *delim = " \t\n";
-    char *p = input_buffer->buffer;
-
     Parser parser;
     parser_init(&parser, input_buffer->buffer);
 
@@ -57,15 +50,22 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     : parse_insert_statement(&parser);
 
     if (tree == NULL) {
-        return -1;
+        printf("%s\n", parser.error);
+        return COMMAND_SUCCESS;
     }
 
+    CommandResult result;
     if (tree->type == AST_INSERT) {
-        return insert_command(tree, table);
+        result = insert_command(tree, table);
+    } else if (tree->as.select.is_star) {
+        result = select_all_command(table);
+    } else {
+        // TODO: SELECT with an explicit column list and/or a WHERE clause
+        // needs new execution functions only SELECT * is wired up so far.
+        printf("This SELECT form isn't supported yet only SELECT * is wired up so far.\n");
+        result = COMMAND_SUCCESS;
     }
 
-    // TODO: add approprite function in SELECT to handle when where is NULL + columns is not empty & when when is not NULL
-    if (tree->type == AST_SELECT && tree->as.select.is_star == true) {
-        return select_all_command(table);
-    }
+    ast_destroy(tree);
+    return result;
 }
