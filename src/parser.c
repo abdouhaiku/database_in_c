@@ -5,7 +5,6 @@
 #include "parser.h"
 
 #include <stdlib.h>
-#include <string.h>
 
 void parser_init(Parser *parser, const char *sql) {
     Tokenizer *tokenizer = malloc(sizeof(Tokenizer));
@@ -72,46 +71,62 @@ AstNode *parse_expression(Parser *parser) {
 }
 
 AstNode *parse_select_statement(Parser *parser) {
+    if (parser->current.type != TOKEN_SELECT) {
+        return NULL;
+    }
+
     AstNode *node = malloc(sizeof(AstNode));
-    if (parser->current.type == TOKEN_SELECT) {
-        node->type = AST_SELECT;
+    node->type = AST_SELECT;
+    node->as.select.is_star = false;
+    node->as.select.column_count = 0;
+    node->as.select.where = NULL;
+    parser_advance(parser);
+
+    if (parser->current.type == TOKEN_STAR) {
+        node->as.select.is_star = true;
         parser_advance(parser);
-        // Get the column list
-        size_t column_count = 0;
-        AstNode *columns[3];
+    } else {
+        // Column list
         while (parser->current.type != TOKEN_EOF && parser->current.type != TOKEN_FROM) {
             if (parser->current.type == TOKEN_COMMA) {
                 parser_advance(parser);
+                continue;
             }
-            else if (parser->current.type == TOKEN_IDENTIFIER) {
-                columns[column_count] = parse_primary_expression(parser);
-                column_count++;
-            }
-            else {
-                //error while parsing
+            if (parser->current.type != TOKEN_IDENTIFIER) {
+                // Unexpected token where a column name or comma was expected.
+                ast_destroy(node);
                 return NULL;
             }
-        }
-
-        if (column_count > 0) {
-            for (size_t i = 0; i < column_count; i++) {
-                node->as.select.columns[i] = columns[i];
+            if (node->as.select.column_count >= 3) {
+                // Too many columns, only id/username/email can ever exist.
+                ast_destroy(node);
+                return NULL;
             }
-        }
-        if (parser->current.type == TOKEN_FROM) {
-            parser_advance(parser);
-        }
-
-        // Get the name of the table
-        if (parser->current.type == TOKEN_IDENTIFIER) {
-            node->as.select.table = malloc(parser->current.text_length);
-            strncpy(node->as.select.table, parser->current.text, parser->current.text_length);
-            parser_advance(parser);
-        }
-
-        if (parser->current.type == TOKEN_WHERE) {
-            node->as.select.where = parse_expression(parser);
+            node->as.select.columns[node->as.select.column_count] = parse_primary_expression(parser);
+            node->as.select.column_count++;
         }
     }
 
+    if (parser->current.type != TOKEN_FROM) {
+        // FROM is required.
+        ast_destroy(node);
+        return NULL;
+    }
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_IDENTIFIER) {
+        // Table name is required after FROM.
+        ast_destroy(node);
+        return NULL;
+    }
+    node->as.select.table = parser->current.text;
+    node->as.select.table_length = parser->current.text_length;
+    parser_advance(parser);
+
+    if (parser->current.type == TOKEN_WHERE) {
+        parser_advance(parser); // consume WHERE itself before parsing the condition
+        node->as.select.where = parse_expression(parser);
+    }
+
+    return node;
 }

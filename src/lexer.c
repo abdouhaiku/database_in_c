@@ -69,6 +69,8 @@ const char* token_type_name(Token* token) {
             return "TOKEN_SEMICOLON";
         case TOKEN_EQUAL:
             return "TOKEN_EQUAL";
+        case TOKEN_STAR:
+            return "TOKEN_STAR";
         case TOKEN_EOF:
             return "TOKEN_EOF";
         case TOKEN_INVALID:
@@ -121,6 +123,9 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
             break;
         case '=':
             out_token->type = TOKEN_EQUAL;
+            break;
+        case '*':
+            out_token->type = TOKEN_STAR;
             break;
     }
     if (out_token->type != TOKEN_NONE) {
