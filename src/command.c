@@ -1,6 +1,3 @@
-
-
-
 #include "command.h"
 #include "ast.h"
 
@@ -14,7 +11,7 @@
 #include "repl.h"
 #include "table.h"
 
-CommandResult do_meta_command(InputBuffer *input_buffer,Table *table) {
+CommandResult do_meta_command(InputBuffer *input_buffer, Table *table) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
         return COMMAND_SUCCESS;
     }
@@ -46,8 +43,8 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     parser_init(&parser, input_buffer->buffer);
 
     AstNode *tree = parser.current.type == TOKEN_SELECT
-    ? parse_select_statement(&parser)
-    : parse_insert_statement(&parser);
+                        ? parse_select_statement(&parser)
+                        : parse_insert_statement(&parser);
 
     if (tree == NULL) {
         printf("%s\n", parser.error);
@@ -59,6 +56,8 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
         result = insert_command(tree, table);
     } else if (tree->as.select.is_star) {
         result = select_all_command(table);
+    } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
+        result = select_columns_or_filter(table, tree);
     } else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause
         // needs new execution functions only SELECT * is wired up so far.

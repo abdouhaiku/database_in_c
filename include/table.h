@@ -25,6 +25,7 @@ CommandResult insert_command(AstNode *tree, Table *table);
 
 CommandResult select_all_command(Table *table);
 CommandResult select_by_id(Table *table, int64_t key);
+CommandResult select_columns_or_filter(Table *table, AstNode *tree);
 
 Table *table_open(const char *filename);
 void   table_close(Table *table);

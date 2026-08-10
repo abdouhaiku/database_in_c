@@ -136,6 +136,51 @@ CommandResult select_by_id(Table *table, int64_t key) {
     printf("Row that matches the ID %ld is : %s, %s\n", row.id, row.username, row.email);
     return COMMAND_SUCCESS;
 }
+
+CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
+    // Find the first leaf
+    void *curr = pager_get_page(table->pager, 0);
+    if (curr == NULL) {
+        return -1;
+    }
+    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
+    }
+    while (curr != NULL) {
+        uint32_t num_cells = *leaf_node_num_cells(curr);
+        for (uint32_t i = 0; i< num_cells; i++) {
+            Row row;
+            deserialize_row(leaf_node_value(curr, i), &row);
+            int matches = 1;
+            if (tree->as.select.where != NULL) {
+                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "id") == 0 && tree->as.select.where->as.equals.right->as.literal_int != row.id) matches = 0;
+                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "username") == 0 && strcmp(tree->as.select.where->as.equals.right->as.literal_string.text, row.username) == 0) matches = 0;
+                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "email") == 0 && strcmp(tree->as.select.where->as.equals.right->as.literal_string.text, row.email) == 0) matches = 0;
+            }
+            if (tree->as.select.column_count > 0 && matches == 1) {
+                for (int i= 0; i< tree->as.select.column_count; i++) {
+                    if (strcmp(tree->as.select.columns[i]->as.column.name, "ID") == 0) {
+                        printf("%lld ",row.id);
+                    }
+                    else if (strcmp(tree->as.select.columns[i]->as.column.name, "USERNAME") == 0) {
+                        printf("%s ",row.username);
+                    }
+                    else {
+                        printf("%s ",row.email);
+                    }
+                }
+                printf("\n");
+            }
+            else if (matches == 1) {
+                printf("%lld, %s, %s\n", row.id, row.username, row.email);
+            }
+        }
+        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) break;
+        curr = pager_get_page(table->pager, next_leaf_num);
+    }
+    return COMMAND_SUCCESS;
+}
 void serialize_row(const Row *row, uint8_t *destination) {
     memcpy(destination, &row->id, 8);
     memcpy(destination + 8, row->username, 25);
