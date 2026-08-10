@@ -137,6 +137,36 @@ CommandResult select_by_id(Table *table, int64_t key) {
     return COMMAND_SUCCESS;
 }
 
+// column.name/literal_string.text are borrowed, non-null-terminated pointers
+// into the raw input line.  comparisons must be length-bounded, never strcmp which causes the bug in earlier versions.
+static bool column_name_is(const AstNode *column, const char *name) {
+    return column->as.column.length == strlen(name) &&
+           strncasecmp(column->as.column.name, name, column->as.column.length) == 0;
+}
+
+static bool literal_string_equals(const AstNode *literal, const char *str) {
+    return literal->as.literal_string.length == strlen(str) &&
+           strncmp(literal->as.literal_string.text, str, literal->as.literal_string.length) == 0;
+}
+
+static bool row_matches_where(const AstNode *where, const Row *row) {
+    if (where == NULL) {
+        return true;
+    }
+    const AstNode *column = where->as.equals.left;
+    const AstNode *value = where->as.equals.right;
+    if (column_name_is(column, "id")) {
+        return value->as.literal_int == row->id;
+    }
+    if (column_name_is(column, "username")) {
+        return literal_string_equals(value, row->username);
+    }
+    if (column_name_is(column, "email")) {
+        return literal_string_equals(value, row->email);
+    }
+    return false;
+}
+
 CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
     // Find the first leaf
     void *curr = pager_get_page(table->pager, 0);
@@ -151,28 +181,26 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
         for (uint32_t i = 0; i< num_cells; i++) {
             Row row;
             deserialize_row(leaf_node_value(curr, i), &row);
-            int matches = 1;
-            if (tree->as.select.where != NULL) {
-                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "id") == 0 && tree->as.select.where->as.equals.right->as.literal_int != row.id) matches = 0;
-                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "username") == 0 && strcmp(tree->as.select.where->as.equals.right->as.literal_string.text, row.username) == 0) matches = 0;
-                if (strcmp(tree->as.select.where->as.equals.left->as.column.name, "email") == 0 && strcmp(tree->as.select.where->as.equals.right->as.literal_string.text, row.email) == 0) matches = 0;
+            if (!row_matches_where(tree->as.select.where, &row)) {
+                continue;
             }
-            if (tree->as.select.column_count > 0 && matches == 1) {
-                for (int i= 0; i< tree->as.select.column_count; i++) {
-                    if (strcmp(tree->as.select.columns[i]->as.column.name, "ID") == 0) {
-                        printf("%lld ",row.id);
+            if (tree->as.select.column_count > 0) {
+                for (size_t col_idx = 0; col_idx < tree->as.select.column_count; col_idx++) {
+                    AstNode *column = tree->as.select.columns[col_idx];
+                    if (column_name_is(column, "id")) {
+                        printf("%ld ", row.id);
                     }
-                    else if (strcmp(tree->as.select.columns[i]->as.column.name, "USERNAME") == 0) {
-                        printf("%s ",row.username);
+                    else if (column_name_is(column, "username")) {
+                        printf("%s ", row.username);
                     }
-                    else {
-                        printf("%s ",row.email);
+                    else if (column_name_is(column, "email")) {
+                        printf("%s ", row.email);
                     }
                 }
                 printf("\n");
             }
-            else if (matches == 1) {
-                printf("%lld, %s, %s\n", row.id, row.username, row.email);
+            else {
+                printf("%ld, %s, %s\n", row.id, row.username, row.email);
             }
         }
         uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
