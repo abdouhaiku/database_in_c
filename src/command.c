@@ -54,17 +54,16 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
     CommandResult result;
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, table);
-    } else if (tree->as.select.is_star) {
+    } else if (tree->as.select.is_star && tree->as.select.where == NULL) {
         result = select_all_command(table);
     } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
         result = select_columns_or_filter(table, tree);
     } else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause
         // needs new execution functions only SELECT * is wired up so far.
-        printf("This SELECT form isn't supported yet only SELECT * is wired up so far.\n");
+        printf("This SELECT form isn't supported yet ");
         result = COMMAND_SUCCESS;
     }
-
     ast_destroy(tree);
     return result;
 }
