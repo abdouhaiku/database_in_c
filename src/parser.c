@@ -106,9 +106,8 @@ AstNode *parse_select_statement(Parser *parser) {
                 ast_destroy(node);
                 return NULL;
             }
-            if (node->as.select.column_count >= 3) {
-                // Too many columns, only id/username/email can ever exist.
-                parser_set_error(parser, "at most 3 columns (id, username, email)");
+            if (node->as.select.column_count >= MAX_TABLE_COLUMNS) {
+                parser_set_error(parser, "at most 8 columns");
                 ast_destroy(node);
                 return NULL;
             }

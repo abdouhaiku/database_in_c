@@ -23,9 +23,15 @@ void ast_destroy(AstNode *node) {
             }
             ast_destroy(node->as.select.where);
             break;
+        case AST_CREATE_TABLE:
+            for (size_t i = 0; i < node->as.create_table.column_count; i++) {
+                ast_destroy(node->as.create_table.columns_definitions[i]);
+            }
+            break;
         case EXPR_LITERAL_INT:
         case EXPR_LITERAL_STRING:
         case EXPR_COLUMN:
+        case EXPR_COLUMN_DEFINITION:
             // leaves nothing owned to free besides the node itself
             break;
         case EXPR_EQUALS:
@@ -43,6 +49,8 @@ char* ast_node_type_by_name(AstNodeType type) {
             return "AST_INSERT";
         case AST_SELECT:
             return "AST_SELECT";
+        case AST_CREATE_TABLE:
+            return "AST_CREATE_TABLE";
         case EXPR_LITERAL_INT:
             return "EXPR_LITERAL_INT";
         case EXPR_LITERAL_STRING:
@@ -51,8 +59,19 @@ char* ast_node_type_by_name(AstNodeType type) {
             return "EXPR_COLUMN";
         case EXPR_EQUALS:
             return "EXPR_EQUALS";
+        case EXPR_COLUMN_DEFINITION:
+            return "EXPR_COLUMN_DEFINITION";
     }
     return "AST_UNKNOWN";
+}
+
+static const char *column_type_name(ColumnType type) {
+    switch (type) {
+        case COLUMN_INTEGER: return "INTEGER";
+        case COLUMN_TEXT:    return "TEXT";
+        case COLUMN_BOOLEAN: return "BOOLEAN";
+    }
+    return "UNKNOWN";
 }
 
 static void ast_print_indent(int depth) {
@@ -109,6 +128,25 @@ static void ast_print_node(AstNode *node, int depth) {
         case EXPR_COLUMN:
             ast_print_indent(depth + 1);
             printf("name: %.*s\n", (int) node->as.column.length, node->as.column.name);
+            break;
+        case AST_CREATE_TABLE:
+            ast_print_indent(depth + 1);
+            printf("table: %.*s\n", (int) node->as.create_table.table_length, node->as.create_table.table);
+            ast_print_indent(depth + 1);
+            printf("columns: [\n");
+            for (size_t i = 0; i < node->as.create_table.column_count; i++) {
+                ast_print_node(node->as.create_table.columns_definitions[i], depth + 2);
+            }
+            ast_print_indent(depth + 1);
+            printf("]\n");
+            break;
+        case EXPR_COLUMN_DEFINITION:
+            ast_print_indent(depth + 1);
+            printf("name: %.*s\n", (int) node->as.column_definition.length, node->as.column_definition.name);
+            ast_print_indent(depth + 1);
+            printf("type: %s\n", column_type_name(node->as.column_definition.columnType));
+            ast_print_indent(depth + 1);
+            printf("is_primary: %s\n", node->as.column_definition.is_primary ? "true" : "false");
             break;
         case EXPR_EQUALS:
             ast_print_indent(depth + 1);

@@ -50,13 +50,6 @@ typedef enum {
     NODE_INTERNAL
 } NodeType;
 
-
-typedef enum {
-    COLUMN_INTEGER,
-    COLUMN_TEXT,
-    COLUMN_BOOLEAN
-} ColumnType;
-
 void leaf_node_init(void *page);
 
 uint32_t *leaf_node_num_cells(void *page);
