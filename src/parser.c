@@ -52,6 +52,21 @@ static AstNode *parse_primary_expression(Parser *parser) {
     return node;
 }
 
+static ColumnType parse_column_type(Parser *parser) {
+    switch (parser->current.type) {
+        case TOKEN_TYPE_TEXT:
+            return COLUMN_TEXT;
+        case TOKEN_TYPE_BOOLEAN:
+            return COLUMN_BOOLEAN;
+        case TOKEN_TYPE_INTEGER:
+            return COLUMN_INTEGER;
+        default:
+            // Unreachable: the caller only calls this after confirming
+            // current.type is one of the three cases above.
+            return COLUMN_INTEGER;
+    }
+}
+
 AstNode *parse_expression(Parser *parser) {
     AstNode *left = parse_primary_expression(parser);
     if (left == NULL) {
@@ -241,6 +256,113 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     if (parser->current.type != TOKEN_RPAREN) {
         // ')' is required to close the value list.
+        parser_set_error(parser, "')'");
+        ast_destroy(node);
+        return NULL;
+    }
+    parser_advance(parser);
+    return node;
+}
+
+
+// CREATE TABLE users (
+/*
+id INTEGER PRIMARY KEY,
+name TEXT,
+age INTEGER
+);
+*/
+AstNode *parse_create_statement(Parser *parser) {
+    if (parser->current.type != TOKEN_CREATE) {
+        parser_set_error(parser, "CREATE");
+        return NULL;
+    }
+    AstNode *node = malloc(sizeof(AstNode));
+    node->type = AST_CREATE_TABLE;
+    node->as.create_table.column_count = 0;
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_TABLE) {
+        parser_set_error(parser, "TABLE");
+        ast_destroy(node);
+        return NULL;
+    }
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_IDENTIFIER) {
+        parser_set_error(parser, "a table name");
+        ast_destroy(node);
+        return NULL;
+    }
+    node->as.create_table.table = parser->current.text;
+    node->as.create_table.table_length = parser->current.text_length;
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_LPAREN) {
+        parser_set_error(parser, "'('");
+        ast_destroy(node);
+        return NULL;
+    }
+    parser_advance(parser);
+
+    while (parser->current.type != TOKEN_EOF && parser->current.type != TOKEN_RPAREN) {
+        if (node->as.create_table.column_count > 0) {
+            // Every column after the first must be separated by a comma.
+            if (parser->current.type != TOKEN_COMMA) {
+                parser_set_error(parser, "',' or ')'");
+                ast_destroy(node);
+                return NULL;
+            }
+            parser_advance(parser);
+        }
+
+        if (node->as.create_table.column_count >= MAX_TABLE_COLUMNS) {
+            parser_set_error(parser, "at most 8 columns");
+            ast_destroy(node);
+            return NULL;
+        }
+
+        AstNode *column_def = malloc(sizeof(AstNode));
+        column_def->type = EXPR_COLUMN_DEFINITION;
+        column_def->as.column_definition.is_primary = false;
+
+        if (parser->current.type != TOKEN_IDENTIFIER) {
+            parser_set_error(parser, "a column name");
+            ast_destroy(node);
+            free(column_def);
+            return NULL;
+        }
+        column_def->as.column_definition.name = parser->current.text;
+        column_def->as.column_definition.length = parser->current.text_length;
+        parser_advance(parser);
+
+        if (parser->current.type != TOKEN_TYPE_TEXT && parser->current.type != TOKEN_TYPE_INTEGER
+            && parser->current.type != TOKEN_TYPE_BOOLEAN) {
+            parser_set_error(parser, "TEXT, INTEGER, or BOOLEAN");
+            ast_destroy(node);
+            free(column_def);
+            return NULL;
+        }
+        column_def->as.column_definition.columnType = parse_column_type(parser);
+        parser_advance(parser);
+
+        if (parser->current.type == TOKEN_PRIMARY) {
+            parser_advance(parser);
+            if (parser->current.type != TOKEN_KEY) {
+                parser_set_error(parser, "KEY");
+                ast_destroy(node);
+                free(column_def);
+                return NULL;
+            }
+            column_def->as.column_definition.is_primary = true;
+            parser_advance(parser);
+        }
+
+        node->as.create_table.columns_definitions[node->as.create_table.column_count] = column_def;
+        node->as.create_table.column_count++;
+    }
+
+    if (parser->current.type != TOKEN_RPAREN) {
         parser_set_error(parser, "')'");
         ast_destroy(node);
         return NULL;

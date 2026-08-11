@@ -78,6 +78,20 @@ const char* token_type_name(Token* token) {
             return "TOKEN_INVALID";
         case TOKEN_NONE:
             return "TOKEN_NONE";
+        case TOKEN_CREATE:
+            return "TOKEN_CREATE";
+        case TOKEN_TABLE:
+            return "TOKEN_TABLE";
+        case TOKEN_TYPE_TEXT:
+            return "TOKEN_TYPE_TEXT";
+        case TOKEN_TYPE_BOOLEAN:
+            return "TOKEN_TYPE_BOOLEAN";
+        case TOKEN_TYPE_INTEGER:
+            return "TOKEN_TYPE_INTEGER";
+        case TOKEN_PRIMARY:
+            return "TOKEN_PRIMARY";
+        case TOKEN_KEY:
+            return "TOKEN_KEY";
     }
     return "TOKEN_UNKNOWN";
 }
@@ -139,7 +153,7 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     //if non of these cases applies
     const char* c = tokenizer->cursor;
 
-    // Case 1: string literals - handled entirely separately and returned
+    // Case 1: string literals handled entirely separately and returned
     // immediately, since a quoted string can never be a keyword or a number.
     if (*c == '\'') {
         c++;
@@ -194,6 +208,27 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     else if (IS_KEYWORD("VALUES")) {
         out_token->type = TOKEN_VALUE;
     }
+    else if (IS_KEYWORD("TABLE")) {
+        out_token->type = TOKEN_TABLE;
+    }
+    else if (IS_KEYWORD("CREATE")) {
+        out_token->type = TOKEN_CREATE;
+    }
+    else if (IS_KEYWORD("INTEGER")) {
+        out_token->type = TOKEN_TYPE_INTEGER;
+    }
+    else if (IS_KEYWORD("TEXT")) {
+        out_token->type = TOKEN_TYPE_TEXT;
+    }
+    else if (IS_KEYWORD("BOOLEAN")) {
+        out_token->type = TOKEN_TYPE_BOOLEAN;
+    }
+    else if (IS_KEYWORD("PRIMARY")) {
+        out_token->type = TOKEN_PRIMARY;
+    }
+    else if (IS_KEYWORD("KEY")) {
+        out_token->type = TOKEN_KEY;
+    }
     else if (is_digits(out_token->text, out_token->text_length)) {
         out_token->type = TOKEN_INTEGER;
         char temp[out_token->text_length + 1];
@@ -225,9 +260,21 @@ void debug_ast(char *sql) {
     Parser parser;
     parser_init(&parser, sql);
 
-    AstNode *tree = parser.current.type == TOKEN_SELECT
-        ? parse_select_statement(&parser)
-        : parse_insert_statement(&parser);
+    AstNode *tree;
+    switch (parser.current.type) {
+        case TOKEN_SELECT:
+            tree = parse_select_statement(&parser);
+            break;
+        case TOKEN_CREATE:
+            tree = parse_create_statement(&parser);
+            break;
+        case TOKEN_INSERT:
+            tree = parse_insert_statement(&parser);
+            break;
+        default:
+            printf("Statement is not supported\n");
+            return;
+    }
     if (tree == NULL) {
         printf("%s\n", parser.error);
         return;
