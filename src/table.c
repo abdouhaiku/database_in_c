@@ -17,40 +17,6 @@
 void serialize_row(const Row *row, uint8_t *destination);
 void deserialize_row(const uint8_t *source, Row *row);
 
-
-Table *table_open(const char *filename) {
-    errno = 0;
-    Table *table = malloc(sizeof(Table));
-    if (table == NULL) {
-        perror("Error in allocating the table struct\n");
-        free(table);
-        return NULL;
-    }
-    errno = 0;
-    Pager *pager = pager_open(filename);
-    if (pager == NULL) {
-        free((table));
-        return NULL;
-    }
-
-    bool is_new_file = (pager->file_length == 0);
-    errno = 0;
-    void* page0 = pager_get_page(pager, 0);
-    if (page0 == NULL) {
-        perror("Error in getting the page\n");
-        pager_close(pager);
-        free(table);
-        return NULL;
-    }
-
-    if (is_new_file) {
-        leaf_node_init(page0);
-    }
-    table->pager = pager;
-    return table;
-}
-
-
 CommandResult insert_command(AstNode *tree, Table *table) {
     Row row;
 
@@ -60,7 +26,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     printf("Value = %ld\n", result);
     
     uint32_t leaf_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,0), row.id, &leaf_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,table->root_page_num),
+        row.id, &leaf_page_num);
 
     if (leaf_page == NULL) {
         printf("Could not get the leaf page\n");
@@ -93,13 +60,12 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         printf("Error: cannot insert\n");
         return insert_result;
     }
-    //pager_mark_dirty(table->pager, 0);
     return COMMAND_SUCCESS;
 }
 
 CommandResult select_all_command(Table *table) {
     // Find the first leaf
-    void *curr = pager_get_page(table->pager, 0);
+    void *curr = pager_get_page(table->pager, table->root_page_num);
     if (curr == NULL) {
         return -1;
     }
@@ -125,7 +91,7 @@ CommandResult select_all_command(Table *table) {
 }
 CommandResult select_by_id(Table *table, int64_t key) {
     uint32_t out_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, 0), key, &out_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num), key, &out_page_num);
     uint32_t cell_num = leaf_node_find(leaf_page, key);
     if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
         printf("No ID matches this key %ld", key);

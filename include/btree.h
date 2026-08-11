@@ -107,4 +107,6 @@ uint8_t* catalog_node_table(void *page, uint32_t table_num);
 uint32_t *catalog_node_root_page(void *page, uint32_t table_num);
 
 uint8_t *catalog_node_column_count(void *page, uint32_t table_num);
+
+void open_database_and_initialize_catalog(char* filename, Pager *pager);
 #endif //DATABASE_IN_C_BTREE_H

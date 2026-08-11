@@ -7,6 +7,12 @@
 #include <unistd.h>
 
 
+uint32_t pager_allocate_page(Pager *pager) {
+    uint32_t page_num = pager->num_pages;
+    pager->num_pages++;
+    return page_num;
+}
+
 Pager *pager_open(const char *filename) {
     errno = 0;
     int fd = open(filename, O_RDWR | O_CREAT, 0644);

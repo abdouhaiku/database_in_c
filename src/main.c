@@ -11,6 +11,11 @@
 
 int main(void) {
     InputBuffer *input_buffer = new_input_buffer();
+    Pager *pager = pager_open("db.bin");
+    if (pager == NULL) {
+        return -1;
+    }
+
     Table *table = table_open("db.bin");
     if (table == NULL) {
         printf("Problem in creating the table object\n");
@@ -52,7 +57,7 @@ int main(void) {
         }
 
         // process the command
-        CommandResult command_result = process_command(input_buffer, table);
+        CommandResult command_result = process_command(input_buffer,pager);
         if (command_result == UNRECOGNIZED_COMMAND) {
             printf("Unrecognized statement: '%s'.\n", input_buffer->buffer);
         }

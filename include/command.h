@@ -10,7 +10,7 @@
 
 CommandResult do_meta_command(InputBuffer *input_buffer, Table *table);
 
-CommandResult process_command(InputBuffer *input_buffer, Table *table);
+CommandResult process_command(InputBuffer *input_buffer, Pager *pager);
 
 
 #endif //DATABASE_IN_C_COMMAND_H

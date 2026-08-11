@@ -19,6 +19,7 @@ typedef struct {
 
 typedef struct {
     Pager *pager;
+    uint32_t root_page_num;
 } Table;
 
 CommandResult insert_command(AstNode *tree, Table *table);

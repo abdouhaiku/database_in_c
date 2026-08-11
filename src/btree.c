@@ -2,10 +2,25 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/errno.h>
 
 #include "command_result.h"
 #include "table.h"
 
+void open_database_and_initialize_catalog(char* filename, Pager *pager) {
+    bool is_new_file = (pager->file_length == 0);
+    errno = 0;
+    void* page0 = pager_get_page(pager, 0);
+    if (page0 == NULL) {
+        perror("Error in getting the page\n");
+        pager_close(pager);
+        return;
+    }
+
+    if (is_new_file) {
+        catalog_node_init(page0);
+    }
+}
 
 void leaf_node_init(void *page) {
     *((uint8_t *) page + NODE_TYPE_OFFSET) = NODE_LEAF;
@@ -226,8 +241,7 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     int64_t promoted = temp_keys[mid];
 
     if (*((uint8_t*)old_page + IS_ROOT_OFFSET) == 1) {
-        // old_page stays root forever, it can't become a child of anything, so
-        // both halves need brand-new pages, and old_page itself gets rewritten as the new root.
+        //TODO : this should change since the root page is not 0 anymore
         uint32_t left_internal_page_num = pager->num_pages;
         void *left_internal_page = pager_get_page(pager, left_internal_page_num);
         if (left_internal_page == NULL) {
@@ -490,6 +504,7 @@ uint8_t *catalog_node_column_count(void *page, uint32_t table_num) {
     return catalog_node_table(page, table_num) + COLUMN_COUNT_OFFSET;
 }
 
+// return the cell number in the catalog page
 uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length){
     //table_name is expected to be from an AST, so the comparison should be a little cautious
     for (uint32_t i = 0 ; i< *catalog_node_num_tables(page); i++) {

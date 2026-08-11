@@ -38,7 +38,7 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Table *table) {
     return UNRECOGNIZED_COMMAND;
 }
 
-CommandResult process_command(InputBuffer *input_buffer, Table *table) {
+CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     Parser parser;
     parser_init(&parser, input_buffer->buffer);
 
@@ -51,13 +51,31 @@ CommandResult process_command(InputBuffer *input_buffer, Table *table) {
         return COMMAND_SUCCESS;
     }
 
+    // Get the table
+    void* catalog_page = pager_get_page(pager, 0);
+    // Get the page name
+    uint32_t table_num = catalog_node_find_table(catalog_page,parser.current.type == TOKEN_SELECT ? tree->as.select.table : tree->as.insert.table,
+                                    parser.current.type == TOKEN_INSERT ? tree->as.insert.table_length : tree->as.insert.table_length
+    );
+
+    if (table_num == UINT32_MAX) {
+        printf("Table is not found\n");
+        return -1;
+    }
+
+    Table table = {
+        .pager = pager,
+        .root_page_num = *catalog_node_root_page(catalog_page, table_num)
+    };
+
+
     CommandResult result;
     if (tree->type == AST_INSERT) {
-        result = insert_command(tree, table);
+        result = insert_command(tree, &table);
     } else if (tree->as.select.is_star && tree->as.select.where == NULL) {
-        result = select_all_command(table);
+        result = select_all_command(&table);
     } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
-        result = select_columns_or_filter(table, tree);
+        result = select_columns_or_filter(&table, tree);
     } else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause
         // needs new execution functions only SELECT * is wired up so far.
