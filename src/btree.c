@@ -101,11 +101,11 @@ CommandResult leaf_node_insert(Table *table,void *page, uint32_t leaf_page_num, 
 }
 
 
-void debug_leaf_node(void *page, Table* table) {
+void debug_leaf_node(void *page, Pager *pager) {
     // Search for the first leaf, and keep visiting the next leaf
     void *curr = page;
     while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
-        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
+        curr = pager_get_page(pager, *internal_node_value(curr, 0));
     }
     // curr is the first leaf
     int i = 1;
@@ -118,7 +118,7 @@ void debug_leaf_node(void *page, Table* table) {
         i++;
         uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
         if (next_leaf_num == 0) break;
-        curr = pager_get_page(table->pager, next_leaf_num);
+        curr = pager_get_page(pager, next_leaf_num);
     }
 }
 
@@ -241,7 +241,8 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     int64_t promoted = temp_keys[mid];
 
     if (*((uint8_t*)old_page + IS_ROOT_OFFSET) == 1) {
-        //TODO : this should change since the root page is not 0 anymore
+        // old_page stays root forever, it can't become a child of anything, so
+        // both halves need brand-new pages, and old_page itself gets rewritten as the new root.
         uint32_t left_internal_page_num = pager->num_pages;
         void *left_internal_page = pager_get_page(pager, left_internal_page_num);
         if (left_internal_page == NULL) {

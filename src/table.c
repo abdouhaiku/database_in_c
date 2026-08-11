@@ -187,9 +187,3 @@ void deserialize_row(const uint8_t *source, Row *row) {
     memcpy(&row->email, source + 33, 255);
 }
 
-void table_close(Table *table) {
-    pager_close(table->pager);
-    free(table);
-}
-
-

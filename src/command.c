@@ -11,17 +11,17 @@
 #include "repl.h"
 #include "table.h"
 
-CommandResult do_meta_command(InputBuffer *input_buffer, Table *table) {
+CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
     if (strcmp(input_buffer->buffer, ".exit") == 0) {
         return COMMAND_SUCCESS;
     }
     if (strcmp(input_buffer->buffer, ".btree") == 0) {
-        void *page = pager_get_page(table->pager, 0);
+        void *page = pager_get_page(pager, 0);
         if (page == NULL) {
             printf("Error reading leaf node\n");
             return DEBUG_BTREE_SUCCESS;
         }
-        debug_leaf_node(page, table);
+        debug_leaf_node(page, pager);
         return DEBUG_BTREE_SUCCESS;
     }
     if (strncasecmp(input_buffer->buffer, ".tokens", 7) == 0) {
@@ -54,8 +54,9 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     // Get the table
     void* catalog_page = pager_get_page(pager, 0);
     // Get the page name
-    uint32_t table_num = catalog_node_find_table(catalog_page,parser.current.type == TOKEN_SELECT ? tree->as.select.table : tree->as.insert.table,
-                                    parser.current.type == TOKEN_INSERT ? tree->as.insert.table_length : tree->as.insert.table_length
+    uint32_t table_num = catalog_node_find_table(catalog_page,
+        tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
+        tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     );
 
     if (table_num == UINT32_MAX) {

@@ -28,8 +28,6 @@ CommandResult select_all_command(Table *table);
 CommandResult select_by_id(Table *table, int64_t key);
 CommandResult select_columns_or_filter(Table *table, AstNode *tree);
 
-Table *table_open(const char *filename);
-void   table_close(Table *table);
 void serialize_row(const Row *row, uint8_t *destination);
 void deserialize_row(const uint8_t *source, Row *row);
 
