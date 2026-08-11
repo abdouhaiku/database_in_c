@@ -33,11 +33,26 @@
 #define INTERNAL_NODE_SPACE_FOR_CELLS (PAGE_SIZE - INTERNAL_NODE_HEADER_SIZE) //4082
 #define INTERNAL_NODE_MAX_KEYS (INTERNAL_NODE_SPACE_FOR_CELLS / INTERNAL_NODE_CELL_SIZE) //340
 
+
+#define TABLE_COUNT_OFFSET      0
+#define TABLE_NAME_OFFSET       4
+#define ROOT_PAGE_NUMBER_OFFSET 36
+#define COLUMN_COUNT_OFFSET     40
+#define TABLE_HEADER_SIZE       37
+#define COLUMN_NAME_SIZE        32
+#define COLUMN_TYPE_SIZE        1
+#define TABLE_ENTRY_SIZE        301 // (33 * 8) + TABLE_HEADER_SIZE
 typedef enum {
     NODE_LEAF,
     NODE_INTERNAL
 } NodeType;
 
+
+typedef enum {
+    COLUMN_INTEGER,
+    COLUMN_TEXT,
+    COLUMN_BOOLEAN
+} ColumnType;
 
 void leaf_node_init(void *page);
 
@@ -77,4 +92,12 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);
 
 uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num);
+
+void catalog_node_init(void *page);
+
+uint32_t *catalog_node_num_tables(void *page);
+
+uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length);
+
+uint8_t* catalog_node_table(void *page, uint32_t table_num);
 #endif //DATABASE_IN_C_BTREE_H

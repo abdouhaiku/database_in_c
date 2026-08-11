@@ -468,3 +468,26 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
 
     return COMMAND_SUCCESS;
 }
+
+
+uint32_t *catalog_node_num_tables(void *page) {
+    return (uint32_t *) ((uint8_t *) page + TABLE_COUNT_OFFSET);
+}
+
+uint8_t* catalog_node_table(void *page, uint32_t table_num) {
+    return (uint8_t *) page + TABLE_NAME_OFFSET + (table_num * TABLE_ENTRY_SIZE);
+}
+
+uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length){
+    //table_name is expected to be from an AST, so the comparison should be a little cautious
+    for (uint32_t i = 0 ; i< *catalog_node_num_tables(page); i++) {
+        // Get the name of the current table
+        char name[32];
+        memcpy(&name, catalog_node_table(page, i), 32);
+        if (strlen(name) == table_length && strncasecmp(name, table, 32) == 0 ) {
+            return i;
+        }
+    }
+    // Not found
+    return UINT32_MAX;
+}
