@@ -470,12 +470,24 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
 }
 
 
+void catalog_node_init(void *page) {
+    memset(page, 0, PAGE_SIZE);
+}
+
 uint32_t *catalog_node_num_tables(void *page) {
     return (uint32_t *) ((uint8_t *) page + TABLE_COUNT_OFFSET);
 }
 
 uint8_t* catalog_node_table(void *page, uint32_t table_num) {
-    return (uint8_t *) page + TABLE_NAME_OFFSET + (table_num * TABLE_ENTRY_SIZE);
+    return (uint8_t *) page + CATALOG_ENTRIES_OFFSET + (table_num * TABLE_ENTRY_SIZE);
+}
+
+uint32_t *catalog_node_root_page(void *page, uint32_t table_num) {
+    return (uint32_t *) (catalog_node_table(page, table_num) + ROOT_PAGE_NUMBER_OFFSET);
+}
+
+uint8_t *catalog_node_column_count(void *page, uint32_t table_num) {
+    return catalog_node_table(page, table_num) + COLUMN_COUNT_OFFSET;
 }
 
 uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length){

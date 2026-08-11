@@ -35,9 +35,12 @@
 
 
 #define TABLE_COUNT_OFFSET      0
-#define TABLE_NAME_OFFSET       4
-#define ROOT_PAGE_NUMBER_OFFSET 36
-#define COLUMN_COUNT_OFFSET     40
+#define CATALOG_ENTRIES_OFFSET  4   // page offset where table entry 0 begins
+
+#define TABLE_NAME_OFFSET       0
+#define ROOT_PAGE_NUMBER_OFFSET 32
+#define COLUMN_COUNT_OFFSET     36
+#define TABLE_COLUMNS_OFFSET    37
 #define TABLE_HEADER_SIZE       37
 #define COLUMN_NAME_SIZE        32
 #define COLUMN_TYPE_SIZE        1
@@ -100,4 +103,8 @@ uint32_t *catalog_node_num_tables(void *page);
 uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length);
 
 uint8_t* catalog_node_table(void *page, uint32_t table_num);
+
+uint32_t *catalog_node_root_page(void *page, uint32_t table_num);
+
+uint8_t *catalog_node_column_count(void *page, uint32_t table_num);
 #endif //DATABASE_IN_C_BTREE_H
