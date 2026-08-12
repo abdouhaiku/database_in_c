@@ -38,30 +38,52 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
     return UNRECOGNIZED_COMMAND;
 }
 
+
 CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     Parser parser;
     parser_init(&parser, input_buffer->buffer);
+    AstNode *tree;
+    switch (parser.current.type) {
+        case TOKEN_SELECT:
+            tree = parse_select_statement(&parser);
+            break;
+        case TOKEN_CREATE:
+            tree = parse_create_statement(&parser);
+            break;
+        case TOKEN_INSERT:
+            tree = parse_insert_statement(&parser);
+            break;
+        default:
+            printf("Statement is not supported\n");
+            return -1;
+    }
 
-    AstNode *tree = parser.current.type == TOKEN_SELECT
-                        ? parse_select_statement(&parser)
-                        : parse_insert_statement(&parser);
 
     if (tree == NULL) {
         printf("%s\n", parser.error);
         return COMMAND_SUCCESS;
     }
 
+
     // Get the table
     void* catalog_page = pager_get_page(pager, 0);
     // Get the page name
+
     uint32_t table_num = catalog_node_find_table(catalog_page,
         tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
         tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     );
 
-    if (table_num == UINT32_MAX) {
+    if (table_num == UINT32_MAX && tree->type != AST_CREATE_TABLE) {
         printf("Table is not found\n");
         return -1;
+    }
+
+    if (tree->type == AST_CREATE_TABLE) {
+        uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.create_table.table, tree->as.create_table.table_length);
+        if (table_num < UINT32_MAX) {
+            printf("Table already exists! \n");
+        }
     }
 
     Table table = {
@@ -77,7 +99,11 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         result = select_all_command(&table);
     } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
         result = select_columns_or_filter(&table, tree);
-    } else {
+    }
+    else if (tree->type == AST_CREATE_TABLE) {
+        result = create_table(tree);
+    }
+    else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause
         // needs new execution functions only SELECT * is wired up so far.
         printf("This SELECT form isn't supported yet ");

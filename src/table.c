@@ -175,6 +175,39 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
     }
     return COMMAND_SUCCESS;
 }
+
+CommandResult create_table(Pager *pager, AstNode *tree) {
+    void* catalog_page = pager_get_page(pager, 0);
+    // 1. Allocate page and mark it dirty ?
+    // 2. Padding text column names to reach 32 bytes ?
+    // 3. Add a function to set the name of the table ?
+    uint32_t page_num = pager_allocate_page(pager);
+    pager_get_page(pager, page_num);
+    uint32_t number_of_tables = *(uint32_t*)((uint8_t*)catalog_page + TABLE_COUNT_OFFSET);
+    if ( number_of_tables >= MAX_CATALOG_TABLES) {
+        printf("MAX TABLES NUMBER REACHED! \n");
+        return -1;
+    }
+
+    memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_NAME_OFFSET, tree->as.create_table.table,
+        tree->as.create_table.table_length);
+    memcpy(catalog_node_table(catalog_page, number_of_tables) + ROOT_PAGE_NUMBER_OFFSET, &page_num, 4);
+    memcpy(catalog_node_table(catalog_page, number_of_tables) + COLUMN_COUNT_OFFSET, &tree->as.create_table.column_count, 1);
+    for (int i = 0; i<tree->as.create_table.column_count; i++) {
+        //TODO: Is COLUMN_NAME_SIZE or length ? For padding purposes
+        memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET +
+            (i * TABLE_ENTRY_SIZE) + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE)), &tree->as.create_table.columns_definitions[i]->as.column_definition.name, COLUMN_NAME_SIZE);
+        memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET +
+    (i * TABLE_ENTRY_SIZE) + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE)) + COLUMN_NAME_SIZE, &tree->as.create_table.columns_definitions[i]->as.column_definition.columnType, COLUMN_TYPE_SIZE);
+
+        if (tree->as.create_table.columns_definitions[i]->as.column_definition.is_primary) {
+            memcpy(catalog_node_primary_key_column(catalog_page, number_of_tables), &i, 1);
+        }
+    }
+    pager_mark_dirty(pager, 0);
+    pager_mark_dirty(pager, page_num);
+
+}
 void serialize_row(const Row *row, uint8_t *destination) {
     memcpy(destination, &row->id, 8);
     memcpy(destination + 8, row->username, 25);

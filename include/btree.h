@@ -37,14 +37,16 @@
 #define TABLE_COUNT_OFFSET      0
 #define CATALOG_ENTRIES_OFFSET  4   // page offset where table entry 0 begins
 
-#define TABLE_NAME_OFFSET       0
-#define ROOT_PAGE_NUMBER_OFFSET 32
-#define COLUMN_COUNT_OFFSET     36
-#define TABLE_COLUMNS_OFFSET    37
-#define TABLE_HEADER_SIZE       37
-#define COLUMN_NAME_SIZE        32
-#define COLUMN_TYPE_SIZE        1
-#define TABLE_ENTRY_SIZE        301 // (33 * 8) + TABLE_HEADER_SIZE
+#define TABLE_NAME_OFFSET          0
+#define ROOT_PAGE_NUMBER_OFFSET    32
+#define COLUMN_COUNT_OFFSET        36
+#define PRIMARY_KEY_COLUMN_OFFSET  37  // index (0-7) of the column that's the primary key
+#define TABLE_COLUMNS_OFFSET       38
+#define TABLE_HEADER_SIZE          38
+#define COLUMN_NAME_SIZE           32
+#define COLUMN_TYPE_SIZE           1
+#define TABLE_ENTRY_SIZE           302 // (33 * 8) + TABLE_HEADER_SIZE
+#define MAX_CATALOG_TABLES         13
 typedef enum {
     NODE_LEAF,
     NODE_INTERNAL
@@ -100,6 +102,8 @@ uint8_t* catalog_node_table(void *page, uint32_t table_num);
 uint32_t *catalog_node_root_page(void *page, uint32_t table_num);
 
 uint8_t *catalog_node_column_count(void *page, uint32_t table_num);
+
+uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num);
 
 void open_database_and_initialize_catalog(char* filename, Pager *pager);
 #endif //DATABASE_IN_C_BTREE_H

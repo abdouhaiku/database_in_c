@@ -505,6 +505,10 @@ uint8_t *catalog_node_column_count(void *page, uint32_t table_num) {
     return catalog_node_table(page, table_num) + COLUMN_COUNT_OFFSET;
 }
 
+uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num) {
+    return catalog_node_table(page, table_num) + PRIMARY_KEY_COLUMN_OFFSET;
+}
+
 // return the cell number in the catalog page
 uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length){
     //table_name is expected to be from an AST, so the comparison should be a little cautious

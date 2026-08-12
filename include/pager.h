@@ -29,5 +29,7 @@ int pager_flush(Pager *pager, uint32_t page_number);
 
 void pager_close(Pager *pager);
 
+uint32_t pager_allocate_page(Pager *pager);
+
 
 #endif //DATABASE_IN_C_PAGER_H
