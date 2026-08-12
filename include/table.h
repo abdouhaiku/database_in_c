@@ -27,6 +27,7 @@ CommandResult insert_command(AstNode *tree, Table *table);
 CommandResult select_all_command(Table *table);
 CommandResult select_by_id(Table *table, int64_t key);
 CommandResult select_columns_or_filter(Table *table, AstNode *tree);
+CommandResult create_table(Pager *pager, AstNode *tree);
 
 void serialize_row(const Row *row, uint8_t *destination);
 void deserialize_row(const uint8_t *source, Row *row);

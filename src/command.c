@@ -67,23 +67,28 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
 
     // Get the table
     void* catalog_page = pager_get_page(pager, 0);
-    // Get the page name
+
+    if (tree->type == AST_CREATE_TABLE) {
+        uint32_t existing = catalog_node_find_table(catalog_page, tree->as.create_table.table, tree->as.create_table.table_length);
+        if (existing != UINT32_MAX) {
+            printf("Table already exists!\n");
+            ast_destroy(tree);
+            return COMMAND_SUCCESS;
+        }
+        CommandResult result = create_table(pager, tree); // 2
+        ast_destroy(tree);
+        return result;
+    }
 
     uint32_t table_num = catalog_node_find_table(catalog_page,
         tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
         tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     );
 
-    if (table_num == UINT32_MAX && tree->type != AST_CREATE_TABLE) {
+    if (table_num == UINT32_MAX) {
         printf("Table is not found\n");
-        return -1;
-    }
-
-    if (tree->type == AST_CREATE_TABLE) {
-        uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.create_table.table, tree->as.create_table.table_length);
-        if (table_num < UINT32_MAX) {
-            printf("Table already exists! \n");
-        }
+        ast_destroy(tree);
+        return COMMAND_SUCCESS;
     }
 
     Table table = {
@@ -99,9 +104,6 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         result = select_all_command(&table);
     } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
         result = select_columns_or_filter(&table, tree);
-    }
-    else if (tree->type == AST_CREATE_TABLE) {
-        result = create_table(tree);
     }
     else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause

@@ -178,35 +178,45 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
 
 CommandResult create_table(Pager *pager, AstNode *tree) {
     void* catalog_page = pager_get_page(pager, 0);
-    // 1. Allocate page and mark it dirty ?
-    // 2. Padding text column names to reach 32 bytes ?
-    // 3. Add a function to set the name of the table ?
-    uint32_t page_num = pager_allocate_page(pager);
-    pager_get_page(pager, page_num);
-    uint32_t number_of_tables = *(uint32_t*)((uint8_t*)catalog_page + TABLE_COUNT_OFFSET);
-    if ( number_of_tables >= MAX_CATALOG_TABLES) {
+    uint32_t number_of_tables = *catalog_node_num_tables(catalog_page);
+    if (number_of_tables >= MAX_CATALOG_TABLES) {
         printf("MAX TABLES NUMBER REACHED! \n");
-        return -1;
+        return COMMAND_SUCCESS;
     }
+
+    uint32_t page_num = pager_allocate_page(pager);
+    leaf_node_init(pager_get_page(pager, page_num));
 
     memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_NAME_OFFSET, tree->as.create_table.table,
         tree->as.create_table.table_length);
     memcpy(catalog_node_table(catalog_page, number_of_tables) + ROOT_PAGE_NUMBER_OFFSET, &page_num, 4);
     memcpy(catalog_node_table(catalog_page, number_of_tables) + COLUMN_COUNT_OFFSET, &tree->as.create_table.column_count, 1);
-    for (int i = 0; i<tree->as.create_table.column_count; i++) {
-        //TODO: Is COLUMN_NAME_SIZE or length ? For padding purposes
-        memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET +
-            (i * TABLE_ENTRY_SIZE) + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE)), &tree->as.create_table.columns_definitions[i]->as.column_definition.name, COLUMN_NAME_SIZE);
-        memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET +
-    (i * TABLE_ENTRY_SIZE) + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE)) + COLUMN_NAME_SIZE, &tree->as.create_table.columns_definitions[i]->as.column_definition.columnType, COLUMN_TYPE_SIZE);
+    for (size_t i = 0; i < tree->as.create_table.column_count; i++) {
+        AstNode *column_def = tree->as.create_table.columns_definitions[i];
+        //0-31 (table name) -> 32-35 (root page number) -> 36 (column count ) -> 37 (primary key index) -> 38 ( columns slots starts)
+        uint8_t *slot = catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET
+            + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE));
 
-        if (tree->as.create_table.columns_definitions[i]->as.column_definition.is_primary) {
-            memcpy(catalog_node_primary_key_column(catalog_page, number_of_tables), &i, 1);
+        size_t name_length = column_def->as.column_definition.length;
+        if (name_length > COLUMN_NAME_SIZE) {
+            printf("Column name too long\n");
+            return COMMAND_SUCCESS;
+        }
+        memset(slot, 0, COLUMN_NAME_SIZE); // zero-pad so catalog_node_find_table's strlen stays correct
+        memcpy(slot, column_def->as.column_definition.name, name_length); // 3, 8
+        memcpy(slot + COLUMN_NAME_SIZE, &column_def->as.column_definition.columnType, COLUMN_TYPE_SIZE);
+
+        if (column_def->as.column_definition.is_primary) {
+            uint8_t index = (uint8_t) i;
+            memcpy(catalog_node_primary_key_column(catalog_page, number_of_tables), &index, 1);
         }
     }
+
+    *catalog_node_num_tables(catalog_page) = number_of_tables + 1;
     pager_mark_dirty(pager, 0);
     pager_mark_dirty(pager, page_num);
 
+    return COMMAND_SUCCESS;
 }
 void serialize_row(const Row *row, uint8_t *destination) {
     memcpy(destination, &row->id, 8);
