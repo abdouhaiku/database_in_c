@@ -40,50 +40,54 @@ CommandResult insert_command(AstNode *tree, Table *table) {
             return -1;
         }
     }
-    /*Row row;
 
-    errno = 0;
-    long result = tree->as.insert.id;
-    row.id = result;
-    printf("Value = %ld\n", result);
-    
+    Row row;
+    // Get the primary column
+    int primary_column_index = *catalog_node_primary_key_column(catalog_page, table_num);
+    // Get the column value from the tree
+    int64_t primary_key = tree->as.insert.values[primary_column_index]->as.literal_int;
+
     uint32_t leaf_page_num;
     void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,table->root_page_num),
-        row.id, &leaf_page_num);
+        primary_key, &leaf_page_num);
 
     if (leaf_page == NULL) {
         printf("Could not get the leaf page\n");
         return -1;
     }
-    uint32_t cell_num = leaf_node_find(leaf_page, row.id);
-    //TODO : Compare with the primary key
-    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) == row.id) {
-        printf("Id %ld is duplicated\n", row.id);
+
+    uint32_t cell_num = leaf_node_find(leaf_page, primary_key);
+    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) == primary_key) {
+        printf("Id %ld is duplicated\n", primary_key);
         return ID_DUPLICATE_ERROR;
     }
 
+    for (size_t i = 0; i< tree->as.insert.values_count; i++) {
+        switch (tree->as.insert.values[i]->type) {
+            case EXPR_LITERAL_INT:
+                row.values[i].type = INTEGER_TYPE;
+                row.values[i].integer = tree->as.insert.values[i]->as.literal_int;
+                break;
+            case EXPR_LITERAL_STRING:
+                row.values[i].type = TEXT_TYPE;
+                memcpy(row.values[i].string.text, tree->as.insert.values[i]->as.literal_string.text, tree->as.insert.values[i]->as.literal_string.length);
+                row.values[i].string.length = tree->as.insert.values[i]->as.literal_string.length;
+                break;
+            case EXPR_LITERAL_BOOLEAN:
+                row.values[i].type = BOOLEAN_TYPE;
+                row.values[i].bool_value = tree->as.insert.values[i]->as.literal_boolean.bool_value;
+                break;
+        }
+    }
 
-    if (tree->as.insert.username_length >= sizeof(row.username)) {
-        printf("Username too long\n");
-        return COMMAND_SUCCESS;
-    }
-    memcpy(row.username, tree->as.insert.username, tree->as.insert.username_length);
-    row.username[tree->as.insert.username_length] = '\0';
-    if (tree->as.insert.email_length >= sizeof(row.email)) {
-        printf("Email too long! \n");
-        return COMMAND_SUCCESS;
-    }
-    memcpy(row.email, tree->as.insert.email, tree->as.insert.email_length);
-    row.email[tree->as.insert.email_length] = '\0';
-    // get the leaf node
-    CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, row.id, &row);
+    CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, primary_key, &row);
     if (insert_result == LEAF_FULL_ERROR) {
-        insert_result= split_leaf_node(table->pager, leaf_page, leaf_page_num, row.id, &row);
+        insert_result= split_leaf_node(table->pager, leaf_page, leaf_page_num, primary_key, &row);
     }
     if (insert_result != COMMAND_SUCCESS) {
         printf("Error: cannot insert\n");
         return insert_result;
-    }*/
+    }
     return COMMAND_SUCCESS;
 }
 
@@ -242,10 +246,26 @@ CommandResult create_table(Pager *pager, AstNode *tree) {
 
     return COMMAND_SUCCESS;
 }
+
+
 void serialize_row(const Row *row, uint8_t *destination) {
-    memcpy(destination, &row->id, 8);
-    memcpy(destination + 8, row->username, 25);
-    memcpy(destination + 33, row->email, 255);
+    int offset = 0;
+    for (size_t i = 0; i< row->value_count; i++) {
+        switch (row->values[i].type) {
+            case INTEGER_TYPE:
+                memcpy(destination + offset, &row->values[i].integer, sizeof(int64_t));
+                offset += sizeof(int64_t);
+                break;
+            case TEXT_TYPE:
+                memcpy(destination + offset, &row->values[i].string.text, VALUE_TEXT_MAX_LEN);
+                offset += VALUE_TEXT_MAX_LEN;
+                break;
+            case BOOLEAN_TYPE:
+                memcpy(destination + offset, &row->values[i].bool_value, 1);
+                offset += 1;
+                break;
+        }
+    }
 }
 
 void deserialize_row(const uint8_t *source, Row *row) {

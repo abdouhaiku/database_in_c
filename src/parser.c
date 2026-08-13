@@ -351,5 +351,27 @@ AstNode *parse_create_statement(Parser *parser) {
         return NULL;
     }
     parser_advance(parser);
+
+    // Every table must have exactly one integer primary key.
+    size_t primary_key_count = 0;
+    bool primary_key_is_integer = true;
+    for (size_t i = 0; i < node->as.create_table.column_count; i++) {
+        AstNode *column_def = node->as.create_table.columns_definitions[i];
+        if (column_def->as.column_definition.is_primary) {
+            primary_key_count++;
+            primary_key_is_integer = column_def->as.column_definition.columnType == COLUMN_INTEGER;
+        }
+    }
+    if (primary_key_count != 1) {
+        parser_set_error(parser, "exactly one PRIMARY KEY column");
+        ast_destroy(node);
+        return NULL;
+    }
+    if (!primary_key_is_integer) {
+        parser_set_error(parser, "an INTEGER type for the PRIMARY KEY column");
+        ast_destroy(node);
+        return NULL;
+    }
+
     return node;
 }
