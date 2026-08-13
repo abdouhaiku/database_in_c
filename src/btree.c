@@ -516,7 +516,7 @@ uint32_t catalog_node_find_table(void *page, const char *table, size_t table_len
         // Get the name of the current table
         char name[32];
         memcpy(&name, catalog_node_table(page, i), 32);
-        if (strlen(name) == table_length && strncasecmp(name, table, 32) == 0 ) {
+        if (strlen(name) == table_length && strncasecmp(name, table, table_length) == 0 ) {
             return i;
         }
     }

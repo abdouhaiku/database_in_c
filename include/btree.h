@@ -45,6 +45,7 @@
 #define TABLE_HEADER_SIZE          38
 #define COLUMN_NAME_SIZE           32
 #define COLUMN_TYPE_SIZE           1
+#define COLUMN_SIZE                33
 #define TABLE_ENTRY_SIZE           302 // (33 * 8) + TABLE_HEADER_SIZE
 #define MAX_CATALOG_TABLES         13
 typedef enum {

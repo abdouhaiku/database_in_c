@@ -213,44 +213,29 @@ AstNode *parse_insert_statement(Parser *parser) {
             parser_advance(parser);
             continue;
         }
-        if (i >= 3) {
+        if (i >= MAX_TABLE_COLUMNS) {
             // Too many insert values, only id/username/email can ever exist.
-            parser_set_error(parser, "at most 3 values (id, username, email)");
+            parser_set_error(parser, "at most 8 values");
             ast_destroy(node);
             return NULL;
         }
-        switch (i) {
-            case 0:
-                if (parser->current.type != TOKEN_INTEGER) {
-                    // id must be an integer literal.
-                    parser_set_error(parser, "an integer literal for id");
-                    ast_destroy(node);
-                    return NULL;
-                }
-                node->as.insert.id = parser->current.int_value;
+        AstNode *value = parse_primary_expression(parser);
+        if (value == NULL) {
+            ast_destroy(node);
+            return NULL;
+        }
+        node->as.insert.values[i]->type = value->type;
+        switch (value->type) {
+            case EXPR_LITERAL_INT:
+                node->as.insert.values[i]->as.literal_int = value->as.literal_int;
                 break;
-            case 1:
-                if (parser->current.type != TOKEN_STRING) {
-                    // username must be a string literal.
-                    parser_set_error(parser, "a string literal for username");
-                    ast_destroy(node);
-                    return NULL;
-                }
-                node->as.insert.username = parser->current.text;
-                node->as.insert.username_length = parser->current.text_length;
+            case EXPR_LITERAL_STRING:
+                node->as.insert.values[i]->as.literal_string = value->as.literal_string;
                 break;
-            case 2:
-                if (parser->current.type != TOKEN_STRING) {
-                    // email must be a string literal.
-                    parser_set_error(parser, "a string literal for email");
-                    ast_destroy(node);
-                    return NULL;
-                }
-                node->as.insert.email = parser->current.text;
-                node->as.insert.email_length = parser->current.text_length;
+            case EXPR_LITERAL_BOOLEAN:
+                node->as.insert.values[i]->as.literal_boolean = value->as.literal_boolean;
                 break;
         }
-        parser_advance(parser);
         i++;
     }
 

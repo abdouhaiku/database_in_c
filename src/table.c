@@ -18,7 +18,24 @@ void serialize_row(const Row *row, uint8_t *destination);
 void deserialize_row(const uint8_t *source, Row *row);
 
 CommandResult insert_command(AstNode *tree, Table *table) {
-    Row row;
+    // Validate the values
+     // 1. First check if the values count matches the table defintion columns.
+    void* catalog_page = pager_get_page(table->pager, 0);
+    uint32_t table_num = catalog_node_find_table(0, tree->as.insert.table, tree->as.insert.table_length);
+    if (*(size_t*)catalog_node_column_count(pager_get_page(table->pager, 0),table_num) != tree->as.insert.values_count) {
+        printf("The values count does not match the column count definitions! \n");
+        return -1;
+    }
+
+    for (size_t i = 0; i< tree->as.insert.values_count; i++) {
+        if (tree->as.insert.values[i]->type !=
+            (AstNodeType)(*catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE) + COLUMN_NAME_SIZE)) {
+            printf("Type mismatch, exit the program\n");
+            return -1;
+        }
+        
+    }
+    /*Row row;
 
     errno = 0;
     long result = tree->as.insert.id;
@@ -34,10 +51,12 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         return -1;
     }
     uint32_t cell_num = leaf_node_find(leaf_page, row.id);
+    //TODO : Compare with the primary key
     if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) == row.id) {
         printf("Id %ld is duplicated\n", row.id);
         return ID_DUPLICATE_ERROR;
     }
+
 
     if (tree->as.insert.username_length >= sizeof(row.username)) {
         printf("Username too long\n");
@@ -59,7 +78,7 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     if (insert_result != COMMAND_SUCCESS) {
         printf("Error: cannot insert\n");
         return insert_result;
-    }
+    }*/
     return COMMAND_SUCCESS;
 }
 
