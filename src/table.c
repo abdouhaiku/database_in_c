@@ -42,6 +42,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     }
 
     Row row;
+    memset(&row, 0, sizeof(row)); // zero every value slot so unused text bytes are real padding
+    row.value_count = tree->as.insert.values_count;
     // Get the primary column
     int primary_column_index = *catalog_node_primary_key_column(catalog_page, table_num);
     // Get the column value from the tree
@@ -69,6 +71,10 @@ CommandResult insert_command(AstNode *tree, Table *table) {
                 row.values[i].integer = tree->as.insert.values[i]->as.literal_int;
                 break;
             case EXPR_LITERAL_STRING:
+                if (tree->as.insert.values[i]->as.literal_string.length > VALUE_TEXT_MAX_LEN) {
+                    printf("Text value too long\n");
+                    return -1;
+                }
                 row.values[i].type = TEXT_TYPE;
                 memcpy(row.values[i].string.text, tree->as.insert.values[i]->as.literal_string.text, tree->as.insert.values[i]->as.literal_string.length);
                 row.values[i].string.length = tree->as.insert.values[i]->as.literal_string.length;
