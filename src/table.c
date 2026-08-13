@@ -21,19 +21,24 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     // Validate the values
      // 1. First check if the values count matches the table defintion columns.
     void* catalog_page = pager_get_page(table->pager, 0);
-    uint32_t table_num = catalog_node_find_table(0, tree->as.insert.table, tree->as.insert.table_length);
-    if (*(size_t*)catalog_node_column_count(pager_get_page(table->pager, 0),table_num) != tree->as.insert.values_count) {
+    uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.insert.table, tree->as.insert.table_length);
+    if (*catalog_node_column_count(pager_get_page(table->pager, 0),table_num) != tree->as.insert.values_count) {
         printf("The values count does not match the column count definitions! \n");
         return -1;
     }
 
     for (size_t i = 0; i< tree->as.insert.values_count; i++) {
-        if (tree->as.insert.values[i]->type !=
-            (AstNodeType)(*catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE) + COLUMN_NAME_SIZE)) {
+        uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE) + COLUMN_NAME_SIZE);
+
+        bool matches =
+            (stored_type == COLUMN_INTEGER && tree->as.insert.values[i]->type == EXPR_LITERAL_INT)   ||
+            (stored_type == COLUMN_TEXT    && tree->as.insert.values[i]->type == EXPR_LITERAL_STRING) ||
+            (stored_type == COLUMN_BOOLEAN && tree->as.insert.values[i]->type == EXPR_LITERAL_BOOLEAN);
+
+        if (!matches) {
             printf("Type mismatch, exit the program\n");
             return -1;
         }
-        
     }
     /*Row row;
 

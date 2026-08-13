@@ -15,7 +15,9 @@ void ast_destroy(AstNode *node) {
 
     switch (node->type) {
         case AST_INSERT:
-            // table/username/email are borrowed pointers into the SQL text, nothing owned to free
+            for (size_t i = 0; i < node->as.insert.values_count; i++) {
+                ast_destroy(node->as.insert.values[i]);
+            }
             break;
         case AST_SELECT:
             for (size_t i = 0; i < node->as.select.column_count; i++) {
@@ -30,6 +32,7 @@ void ast_destroy(AstNode *node) {
             break;
         case EXPR_LITERAL_INT:
         case EXPR_LITERAL_STRING:
+        case EXPR_LITERAL_BOOLEAN:
         case EXPR_COLUMN:
         case EXPR_COLUMN_DEFINITION:
             // leaves nothing owned to free besides the node itself
@@ -55,6 +58,8 @@ char* ast_node_type_by_name(AstNodeType type) {
             return "EXPR_LITERAL_INT";
         case EXPR_LITERAL_STRING:
             return "EXPR_LITERAL_STRING";
+        case EXPR_LITERAL_BOOLEAN:
+            return "EXPR_LITERAL_BOOLEAN";
         case EXPR_COLUMN:
             return "EXPR_COLUMN";
         case EXPR_EQUALS:
@@ -95,11 +100,12 @@ static void ast_print_node(AstNode *node, int depth) {
             ast_print_indent(depth + 1);
             printf("table: %.*s\n", (int) node->as.insert.table_length, node->as.insert.table);
             ast_print_indent(depth + 1);
-            printf("id: %lld\n", (long long) node->as.insert.id);
+            printf("values: [\n");
+            for (size_t i = 0; i < node->as.insert.values_count; i++) {
+                ast_print_node(node->as.insert.values[i], depth + 2);
+            }
             ast_print_indent(depth + 1);
-            printf("username: %.*s\n", (int) node->as.insert.username_length, node->as.insert.username);
-            ast_print_indent(depth + 1);
-            printf("email: %.*s\n", (int) node->as.insert.email_length, node->as.insert.email);
+            printf("]\n");
             break;
         case AST_SELECT:
             ast_print_indent(depth + 1);
@@ -124,6 +130,10 @@ static void ast_print_node(AstNode *node, int depth) {
         case EXPR_LITERAL_STRING:
             ast_print_indent(depth + 1);
             printf("value: %.*s\n", (int) node->as.literal_string.length, node->as.literal_string.text);
+            break;
+        case EXPR_LITERAL_BOOLEAN:
+            ast_print_indent(depth + 1);
+            printf("value: %s\n", node->as.literal_boolean.bool_value ? "true" : "false");
             break;
         case EXPR_COLUMN:
             ast_print_indent(depth + 1);

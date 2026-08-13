@@ -43,6 +43,14 @@ static AstNode *parse_primary_expression(Parser *parser) {
             node->as.column.name = parser->current.text;
             node->as.column.length = parser->current.text_length;
             break;
+        case TOKEN_TRUE:
+            node->type = EXPR_LITERAL_BOOLEAN;
+            node->as.literal_boolean.bool_value = true;
+            break;
+        case TOKEN_FALSE:
+            node->type = EXPR_LITERAL_BOOLEAN;
+            node->as.literal_boolean.bool_value = false;
+            break;
         default:
             parser_set_error(parser, "a literal or column reference");
             free(node);
@@ -170,6 +178,7 @@ AstNode *parse_insert_statement(Parser *parser) {
 
     AstNode *node = malloc(sizeof(AstNode));
     node->type = AST_INSERT;
+    node->as.insert.values_count = 0;
     parser_advance(parser);
 
     // INSERT INTO users VALUES (1, 'Alice', 'alice@example.com');
@@ -214,7 +223,6 @@ AstNode *parse_insert_statement(Parser *parser) {
             continue;
         }
         if (i >= MAX_TABLE_COLUMNS) {
-            // Too many insert values, only id/username/email can ever exist.
             parser_set_error(parser, "at most 8 values");
             ast_destroy(node);
             return NULL;
@@ -224,18 +232,8 @@ AstNode *parse_insert_statement(Parser *parser) {
             ast_destroy(node);
             return NULL;
         }
-        node->as.insert.values[i]->type = value->type;
-        switch (value->type) {
-            case EXPR_LITERAL_INT:
-                node->as.insert.values[i]->as.literal_int = value->as.literal_int;
-                break;
-            case EXPR_LITERAL_STRING:
-                node->as.insert.values[i]->as.literal_string = value->as.literal_string;
-                break;
-            case EXPR_LITERAL_BOOLEAN:
-                node->as.insert.values[i]->as.literal_boolean = value->as.literal_boolean;
-                break;
-        }
+        node->as.insert.values[i] = value;
+        node->as.insert.values_count++;
         i++;
     }
 

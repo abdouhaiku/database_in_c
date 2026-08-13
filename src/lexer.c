@@ -92,6 +92,10 @@ const char* token_type_name(Token* token) {
             return "TOKEN_PRIMARY";
         case TOKEN_KEY:
             return "TOKEN_KEY";
+        case TOKEN_TRUE:
+            return "TOKEN_TRUE";
+        case TOKEN_FALSE:
+            return "TOKEN_FALSE";
     }
     return "TOKEN_UNKNOWN";
 }
@@ -228,6 +232,12 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     }
     else if (IS_KEYWORD("KEY")) {
         out_token->type = TOKEN_KEY;
+    }
+    else if (IS_KEYWORD("TRUE")) {
+        out_token->type = TOKEN_TRUE;
+    }
+    else if (IS_KEYWORD("FALSE")) {
+        out_token->type = TOKEN_FALSE;
     }
     else if (is_digits(out_token->text, out_token->text_length)) {
         out_token->type = TOKEN_INTEGER;
