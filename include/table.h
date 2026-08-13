@@ -40,6 +40,8 @@ typedef struct {
 typedef struct {
     Pager *pager;
     uint32_t root_page_num;
+    const char* table_name;
+    size_t table_length;
 } Table;
 
 CommandResult insert_command(AstNode *tree, Table *table);
@@ -54,6 +56,5 @@ CommandResult create_table(Pager *pager, AstNode *tree);
 
 void serialize_row(const Row *row, uint8_t *destination);
 
-void deserialize_row(const uint8_t *source, Row *row);
-
+void deserialize_row(const uint8_t *source, Row *row, Table *table);
 #endif //DATABASE_IN_C_TABLE_H

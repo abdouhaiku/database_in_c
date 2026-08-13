@@ -12,28 +12,28 @@
 #include "pager.h"
 
 
-
-
 void serialize_row(const Row *row, uint8_t *destination);
-void deserialize_row(const uint8_t *source, Row *row);
+
+void deserialize_row(const uint8_t *source, Row *row, Table *table);
 
 CommandResult insert_command(AstNode *tree, Table *table) {
     // Validate the values
-     // 1. First check if the values count matches the table defintion columns.
-    void* catalog_page = pager_get_page(table->pager, 0);
+    // 1. First check if the values count matches the table defintion columns.
+    void *catalog_page = pager_get_page(table->pager, 0);
     uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.insert.table, tree->as.insert.table_length);
-    if (*catalog_node_column_count(pager_get_page(table->pager, 0),table_num) != tree->as.insert.values_count) {
+    if (*catalog_node_column_count(pager_get_page(table->pager, 0), table_num) != tree->as.insert.values_count) {
         printf("The values count does not match the column count definitions! \n");
         return -1;
     }
 
-    for (size_t i = 0; i< tree->as.insert.values_count; i++) {
-        uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE) + COLUMN_NAME_SIZE);
+    for (size_t i = 0; i < tree->as.insert.values_count; i++) {
+        uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i * COLUMN_SIZE) +
+                                COLUMN_NAME_SIZE);
 
         bool matches =
-            (stored_type == COLUMN_INTEGER && tree->as.insert.values[i]->type == EXPR_LITERAL_INT)   ||
-            (stored_type == COLUMN_TEXT    && tree->as.insert.values[i]->type == EXPR_LITERAL_STRING) ||
-            (stored_type == COLUMN_BOOLEAN && tree->as.insert.values[i]->type == EXPR_LITERAL_BOOLEAN);
+                (stored_type == COLUMN_INTEGER && tree->as.insert.values[i]->type == EXPR_LITERAL_INT) ||
+                (stored_type == COLUMN_TEXT && tree->as.insert.values[i]->type == EXPR_LITERAL_STRING) ||
+                (stored_type == COLUMN_BOOLEAN && tree->as.insert.values[i]->type == EXPR_LITERAL_BOOLEAN);
 
         if (!matches) {
             printf("Type mismatch, exit the program\n");
@@ -50,8 +50,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     int64_t primary_key = tree->as.insert.values[primary_column_index]->as.literal_int;
 
     uint32_t leaf_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager,table->root_page_num),
-        primary_key, &leaf_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num),
+                                        primary_key, &leaf_page_num);
 
     if (leaf_page == NULL) {
         printf("Could not get the leaf page\n");
@@ -64,7 +64,7 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         return ID_DUPLICATE_ERROR;
     }
 
-    for (size_t i = 0; i< tree->as.insert.values_count; i++) {
+    for (size_t i = 0; i < tree->as.insert.values_count; i++) {
         switch (tree->as.insert.values[i]->type) {
             case EXPR_LITERAL_INT:
                 row.values[i].type = INTEGER_TYPE;
@@ -76,7 +76,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
                     return -1;
                 }
                 row.values[i].type = TEXT_TYPE;
-                memcpy(row.values[i].string.text, tree->as.insert.values[i]->as.literal_string.text, tree->as.insert.values[i]->as.literal_string.length);
+                memcpy(row.values[i].string.text, tree->as.insert.values[i]->as.literal_string.text,
+                       tree->as.insert.values[i]->as.literal_string.length);
                 row.values[i].string.length = tree->as.insert.values[i]->as.literal_string.length;
                 break;
             case EXPR_LITERAL_BOOLEAN:
@@ -88,7 +89,7 @@ CommandResult insert_command(AstNode *tree, Table *table) {
 
     CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, primary_key, &row);
     if (insert_result == LEAF_FULL_ERROR) {
-        insert_result= split_leaf_node(table->pager, leaf_page, leaf_page_num, primary_key, &row);
+        insert_result = split_leaf_node(table, leaf_page, leaf_page_num, primary_key, &row);
     }
     if (insert_result != COMMAND_SUCCESS) {
         printf("Error: cannot insert\n");
@@ -104,36 +105,62 @@ CommandResult select_all_command(Table *table) {
         return -1;
     }
     uint32_t current_count = 0;
-    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
         curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
     }
     // curr is the first leaf node page
     while (curr != NULL) {
         uint32_t num_cells = *leaf_node_num_cells(curr);
-        for (uint32_t i = 0; i< num_cells; i++) {
+        for (uint32_t i = 0; i < num_cells; i++) {
             Row row;
-            deserialize_row(leaf_node_value(curr, i), &row);
-            printf("Row %u : %ld, %s, %s\n", current_count, row.id, row.username, row.email);
+            deserialize_row(leaf_node_value(curr, i), &row, table);
+            printf("Row %u : ", current_count);
+            for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
+                switch (row.values[row_idx].type) {
+                    case INTEGER_TYPE:
+                        printf("%ld ", row.values[row_idx].integer);
+                    case TEXT_TYPE:
+                        printf("%s ", row.values[row_idx].string.text);
+                    case EXPR_LITERAL_BOOLEAN:
+                        row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                }
+                printf("\n");
+            }
             current_count++;
         }
-        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
         if (next_leaf_num == 0) break;
         curr = pager_get_page(table->pager, next_leaf_num);
     }
 
     return COMMAND_SUCCESS;
 }
+
 CommandResult select_by_id(Table *table, int64_t key) {
     uint32_t out_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num), key, &out_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num), key,
+                                        &out_page_num);
     uint32_t cell_num = leaf_node_find(leaf_page, key);
     if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
         printf("No ID matches this key %ld", key);
         return -1;
     }
     Row row;
-    deserialize_row(leaf_node_value(leaf_page, cell_num), &row);
-    printf("Row that matches the ID %ld is : %s, %s\n", row.id, row.username, row.email);
+    deserialize_row(leaf_node_value(leaf_page, cell_num), &row, table);
+    printf("Row that matches the ID %ld is :", key);
+    for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
+        switch (row.values[row_idx].type) {
+            case INTEGER_TYPE:
+                printf("%ld ", row.values[row_idx].integer);
+            case TEXT_TYPE:
+                printf("%s ", row.values[row_idx].string.text);
+            case EXPR_LITERAL_BOOLEAN:
+                row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+        }
+
+        printf("\n");
+    }
+
     return COMMAND_SUCCESS;
 }
 
@@ -149,20 +176,26 @@ static bool literal_string_equals(const AstNode *literal, const char *str) {
            strncmp(literal->as.literal_string.text, str, literal->as.literal_string.length) == 0;
 }
 
-static bool row_matches_where(const AstNode *where, const Row *row) {
+static bool row_matches_where(const AstNode *where, const Row *row, void *catalog_page, size_t table_num) {
     if (where == NULL) {
         return true;
     }
     const AstNode *column = where->as.equals.left;
     const AstNode *value = where->as.equals.right;
-    if (column_name_is(column, "id")) {
-        return value->as.literal_int == row->id;
-    }
-    if (column_name_is(column, "username")) {
-        return literal_string_equals(value, row->username);
-    }
-    if (column_name_is(column, "email")) {
-        return literal_string_equals(value, row->email);
+    for (size_t row_idx = 0; row_idx < row->value_count; row_idx++) {
+        char column_name[32];
+        memcpy(&column_name, catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET +
+               (row_idx*COLUMN_SIZE), 32);
+        if (column_name_is(column, column_name)) {
+            switch (column->type) {
+                case EXPR_LITERAL_INT:
+                    return value->as.literal_int == row->values[row_idx].integer;
+                case EXPR_LITERAL_STRING:
+                    return literal_string_equals(value, row->values[row_idx].string.text);
+                case EXPR_LITERAL_BOOLEAN:
+                    value->as.literal_boolean.bool_value == row->values[row_idx].bool_value;
+            }
+        }
     }
     return false;
 }
@@ -173,37 +206,56 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
     if (curr == NULL) {
         return -1;
     }
-    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
         curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
     }
     while (curr != NULL) {
         uint32_t num_cells = *leaf_node_num_cells(curr);
-        for (uint32_t i = 0; i< num_cells; i++) {
+        for (uint32_t i = 0; i < num_cells; i++) {
             Row row;
-            deserialize_row(leaf_node_value(curr, i), &row);
-            if (!row_matches_where(tree->as.select.where, &row)) {
+            void *catalog_page = pager_get_page(table->pager, 0);
+            uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.select.table,
+                                                         tree->as.select.table_length);
+            deserialize_row(leaf_node_value(curr, i), &row, table);
+            if (!row_matches_where(tree->as.select.where, &row, catalog_page, table_num)) {
                 continue;
             }
+            // Get the columns names
             if (tree->as.select.column_count > 0) {
                 for (size_t col_idx = 0; col_idx < tree->as.select.column_count; col_idx++) {
                     AstNode *column = tree->as.select.columns[col_idx];
-                    if (column_name_is(column, "id")) {
-                        printf("%ld ", row.id);
+                    for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
+                        char column_name[32];
+                        memcpy(&column_name, catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET +
+                               (row_idx*COLUMN_SIZE), 32);
+                        if (column_name_is(column, column_name)) {
+                            switch (column->type) {
+                                case EXPR_LITERAL_INT:
+                                    printf("%ld", row.values[row_idx].integer);
+                                case EXPR_LITERAL_STRING:
+                                    printf("%s ", row.values[row_idx].string.text);
+                                case EXPR_LITERAL_BOOLEAN:
+                                    row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                            }
+                        }
                     }
-                    else if (column_name_is(column, "username")) {
-                        printf("%s ", row.username);
-                    }
-                    else if (column_name_is(column, "email")) {
-                        printf("%s ", row.email);
+                }
+                printf("\n");
+            } else {
+                for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
+                    switch (row.values[i].type) {
+                        case INTEGER_TYPE:
+                            printf("%ld", row.values[row_idx].integer);
+                        case TEXT_TYPE:
+                            printf("%s ", row.values[row_idx].string.text);
+                        case BOOLEAN_TYPE:
+                            row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
                     }
                 }
                 printf("\n");
             }
-            else {
-                printf("%ld, %s, %s\n", row.id, row.username, row.email);
-            }
         }
-        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
         if (next_leaf_num == 0) break;
         curr = pager_get_page(table->pager, next_leaf_num);
     }
@@ -211,7 +263,7 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
 }
 
 CommandResult create_table(Pager *pager, AstNode *tree) {
-    void* catalog_page = pager_get_page(pager, 0);
+    void *catalog_page = pager_get_page(pager, 0);
     uint32_t number_of_tables = *catalog_node_num_tables(catalog_page);
     if (number_of_tables >= MAX_CATALOG_TABLES) {
         printf("MAX TABLES NUMBER REACHED! \n");
@@ -222,14 +274,15 @@ CommandResult create_table(Pager *pager, AstNode *tree) {
     leaf_node_init(pager_get_page(pager, page_num));
 
     memcpy(catalog_node_table(catalog_page, number_of_tables) + TABLE_NAME_OFFSET, tree->as.create_table.table,
-        tree->as.create_table.table_length);
+           tree->as.create_table.table_length);
     memcpy(catalog_node_table(catalog_page, number_of_tables) + ROOT_PAGE_NUMBER_OFFSET, &page_num, 4);
-    memcpy(catalog_node_table(catalog_page, number_of_tables) + COLUMN_COUNT_OFFSET, &tree->as.create_table.column_count, 1);
+    memcpy(catalog_node_table(catalog_page, number_of_tables) + COLUMN_COUNT_OFFSET,
+           &tree->as.create_table.column_count, 1);
     for (size_t i = 0; i < tree->as.create_table.column_count; i++) {
         AstNode *column_def = tree->as.create_table.columns_definitions[i];
         //0-31 (table name) -> 32-35 (root page number) -> 36 (column count ) -> 37 (primary key index) -> 38 ( columns slots starts)
         uint8_t *slot = catalog_node_table(catalog_page, number_of_tables) + TABLE_COLUMNS_OFFSET
-            + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE));
+                        + (i * (COLUMN_NAME_SIZE + COLUMN_TYPE_SIZE));
 
         size_t name_length = column_def->as.column_definition.length;
         if (name_length > COLUMN_NAME_SIZE) {
@@ -256,7 +309,7 @@ CommandResult create_table(Pager *pager, AstNode *tree) {
 
 void serialize_row(const Row *row, uint8_t *destination) {
     int offset = 0;
-    for (size_t i = 0; i< row->value_count; i++) {
+    for (size_t i = 0; i < row->value_count; i++) {
         switch (row->values[i].type) {
             case INTEGER_TYPE:
                 memcpy(destination + offset, &row->values[i].integer, sizeof(int64_t));
@@ -274,9 +327,34 @@ void serialize_row(const Row *row, uint8_t *destination) {
     }
 }
 
-void deserialize_row(const uint8_t *source, Row *row) {
-    memcpy(&row->id, source, 8);
-    memcpy(&row->username, source + 8, 25);
-    memcpy(&row->email, source + 33, 255);
+void deserialize_row(const uint8_t *source, Row *row, Table *table) {
+    // Get the column count from the table
+    void *catalog_page = pager_get_page(table->pager, 0);
+    uint32_t table_num = catalog_node_find_table(catalog_page, table->table_name, table->table_length);
+    // Get the column defintions from the catalog page
+    int column_count = *catalog_node_column_count(pager_get_page(table->pager, 0), table_num);
+    for (size_t i = 0; i < column_count; i++) {
+        uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i * COLUMN_SIZE) +
+                                COLUMN_NAME_SIZE);
+        switch (stored_type) {
+            case COLUMN_INTEGER:
+                row->values[i].type = COLUMN_INTEGER;
+                memcpy(&row->values[i].integer,
+                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
+                       sizeof(int64_t));
+                break;
+            case COLUMN_TEXT:
+                row->values[i].type = COLUMN_TEXT;
+                memcpy(&row->values[i].string,
+                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
+                       VALUE_TEXT_MAX_LEN);
+                break;
+            case COLUMN_BOOLEAN:
+                row->values[i].type = COLUMN_BOOLEAN;
+                memcpy(&row->values[i].bool_value,
+                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
+                       1);
+                break;
+        }
+    }
 }
-

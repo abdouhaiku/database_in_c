@@ -85,7 +85,7 @@ uint32_t internal_node_find(void *page, int64_t key);
 CommandResult internal_node_insert(Pager *pager, void *page, uint32_t page_num, uint32_t cell_num, int64_t key,
                                    uint32_t left_child_page_num, uint32_t right_child_page_num);
 
-CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row);
+CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row);
 
 CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);

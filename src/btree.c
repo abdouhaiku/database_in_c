@@ -366,7 +366,7 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
 }
 
 
-CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
+CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_num, int64_t new_key,
                               const Row *new_row) {
     typedef struct {
         Row row;
@@ -379,7 +379,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
     NodeEntry temp[LEAF_NODE_MAX_CELLS + 1];
     for (uint32_t i = 0; i < LEAF_NODE_MAX_CELLS; i++) {
         temp[i].key = *leaf_node_key(old_page, i);
-        deserialize_row(leaf_node_value(old_page, i), &temp[i].row);
+        deserialize_row(leaf_node_value(old_page, i), &temp[i].row, table);
     }
     //insert the new key into the correct position
     uint32_t i = LEAF_NODE_MAX_CELLS;
@@ -394,8 +394,8 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
     uint32_t mid = (LEAF_NODE_MAX_CELLS + 1) / 2;
     NodeEntry promoted = temp[mid];
     // create a new leaf node
-    right_child_page_num = pager->num_pages;
-    void *right_child_page = pager_get_page(pager, right_child_page_num);
+    right_child_page_num = table->pager->num_pages;
+    void *right_child_page = pager_get_page(table->pager, right_child_page_num);
     if (right_child_page == NULL) {
         return -1;
     }
@@ -413,13 +413,13 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         serialize_row(&temp[mid + index].row, leaf_node_value(right_child_page, index));
         *leaf_node_num_cells(right_child_page) = *leaf_node_num_cells(right_child_page) + 1;
     }
-    pager_mark_dirty(pager, right_child_page_num);
+    pager_mark_dirty(table->pager, right_child_page_num);
 
 
     // If it is a root and a leaf
     if (*((uint8_t *) old_page + IS_ROOT_OFFSET) == 1) {
-        left_child_page_num = pager->num_pages;
-        void *left_child = pager_get_page(pager, left_child_page_num);
+        left_child_page_num = table->pager->num_pages;
+        void *left_child = pager_get_page(table->pager, left_child_page_num);
         if (left_child == NULL) {
             return -1;
         }
@@ -434,7 +434,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         //Update the parent of the left child
         *(uint32_t *) ((uint8_t *) left_child + PARENT_POINTER_OFFSET) = 0;
-        pager_mark_dirty(pager, left_child_page_num);
+        pager_mark_dirty(table->pager, left_child_page_num);
 
         // Reset the old page which is the new root
         memset((uint8_t*)old_page + LEAF_NODE_HEADER_SIZE, 0, LEAF_NODE_SPACE_FOR_CELLS);
@@ -446,7 +446,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *internal_node_num_cells(old_page) = 1;
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         *(uint32_t *) ((uint8_t *) old_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = right_child_page_num;
-        pager_mark_dirty(pager, old_page_num);
+        pager_mark_dirty(table->pager, old_page_num);
         return COMMAND_SUCCESS;
     }
 
@@ -459,7 +459,7 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
         *leaf_node_key(old_page, index) = temp[index].key;
         serialize_row(&temp[index].row, leaf_node_value(old_page, index));
     }
-    pager_mark_dirty(pager, left_child_page_num);
+    pager_mark_dirty(table->pager, left_child_page_num);
     uint32_t parent_page_num = *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
 
     //in case there is more than one leaf
@@ -470,14 +470,14 @@ CommandResult split_leaf_node(Pager *pager, void *old_page, uint32_t old_page_nu
     *(uint32_t *) ((uint8_t *) old_page + NEXT_LEAF_OFFSET) = right_child_page_num;
     // old_page now points at right_child
     //insert the seperator key inside the parent node
-    void *parent_page = pager_get_page(pager, parent_page_num);
+    void *parent_page = pager_get_page(table->pager, parent_page_num);
     if (parent_page == NULL) {
         return -1;
     }
     uint32_t cell_num = internal_node_find(parent_page, promoted.key);
-    if (internal_node_insert(pager, parent_page, parent_page_num, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
+    if (internal_node_insert(table->pager, parent_page, parent_page_num, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
-        return split_internal_node(pager, parent_page, parent_page_num,
+        return split_internal_node(table->pager, parent_page, parent_page_num,
             promoted.key, left_child_page_num, right_child_page_num);
     }
 

@@ -93,7 +93,9 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
 
     Table table = {
         .pager = pager,
-        .root_page_num = *catalog_node_root_page(catalog_page, table_num)
+        .root_page_num = *catalog_node_root_page(catalog_page, table_num),
+        .table_name = tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
+        .table_length = tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     };
 
 
