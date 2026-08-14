@@ -119,13 +119,16 @@ CommandResult select_all_command(Table *table) {
                 switch (row.values[row_idx].type) {
                     case INTEGER_TYPE:
                         printf("%ld ", row.values[row_idx].integer);
+                        break;
                     case TEXT_TYPE:
                         printf("%s ", row.values[row_idx].string.text);
-                    case EXPR_LITERAL_BOOLEAN:
-                        row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                        break;
+                    case BOOLEAN_TYPE:
+                        row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
+                        break;
                 }
-                printf("\n");
             }
+            printf("\n");
             current_count++;
         }
         uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
@@ -152,14 +155,16 @@ CommandResult select_by_id(Table *table, int64_t key) {
         switch (row.values[row_idx].type) {
             case INTEGER_TYPE:
                 printf("%ld ", row.values[row_idx].integer);
+                break;
             case TEXT_TYPE:
                 printf("%s ", row.values[row_idx].string.text);
-            case EXPR_LITERAL_BOOLEAN:
-                row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                break;
+            case BOOLEAN_TYPE:
+                row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
+                break;
         }
-
-        printf("\n");
     }
+    printf("\n");
 
     return COMMAND_SUCCESS;
 }
@@ -187,13 +192,13 @@ static bool row_matches_where(const AstNode *where, const Row *row, void *catalo
         memcpy(&column_name, catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET +
                (row_idx*COLUMN_SIZE), 32);
         if (column_name_is(column, column_name)) {
-            switch (column->type) {
-                case EXPR_LITERAL_INT:
+            switch (row->values[row_idx].type) {
+                case INTEGER_TYPE:
                     return value->as.literal_int == row->values[row_idx].integer;
-                case EXPR_LITERAL_STRING:
+                case TEXT_TYPE:
                     return literal_string_equals(value, row->values[row_idx].string.text);
-                case EXPR_LITERAL_BOOLEAN:
-                    value->as.literal_boolean.bool_value == row->values[row_idx].bool_value;
+                case BOOLEAN_TYPE:
+                    return value->as.literal_boolean.bool_value == row->values[row_idx].bool_value;
             }
         }
     }
@@ -202,7 +207,7 @@ static bool row_matches_where(const AstNode *where, const Row *row, void *catalo
 
 CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
     // Find the first leaf
-    void *curr = pager_get_page(table->pager, 0);
+    void *curr = pager_get_page(table->pager, table->root_page_num);
     if (curr == NULL) {
         return -1;
     }
@@ -229,13 +234,16 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
                         memcpy(&column_name, catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET +
                                (row_idx*COLUMN_SIZE), 32);
                         if (column_name_is(column, column_name)) {
-                            switch (column->type) {
-                                case EXPR_LITERAL_INT:
-                                    printf("%ld", row.values[row_idx].integer);
-                                case EXPR_LITERAL_STRING:
+                            switch (row.values[row_idx].type) {
+                                case INTEGER_TYPE:
+                                    printf("%ld ", row.values[row_idx].integer);
+                                    break;
+                                case TEXT_TYPE:
                                     printf("%s ", row.values[row_idx].string.text);
-                                case EXPR_LITERAL_BOOLEAN:
-                                    row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                                    break;
+                                case BOOLEAN_TYPE:
+                                    row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
+                                    break;
                             }
                         }
                     }
@@ -243,13 +251,16 @@ CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
                 printf("\n");
             } else {
                 for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
-                    switch (row.values[i].type) {
+                    switch (row.values[row_idx].type) {
                         case INTEGER_TYPE:
-                            printf("%ld", row.values[row_idx].integer);
+                            printf("%ld ", row.values[row_idx].integer);
+                            break;
                         case TEXT_TYPE:
                             printf("%s ", row.values[row_idx].string.text);
+                            break;
                         case BOOLEAN_TYPE:
-                            row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE");
+                            row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
+                            break;
                     }
                 }
                 printf("\n");
@@ -332,28 +343,29 @@ void deserialize_row(const uint8_t *source, Row *row, Table *table) {
     void *catalog_page = pager_get_page(table->pager, 0);
     uint32_t table_num = catalog_node_find_table(catalog_page, table->table_name, table->table_length);
     // Get the column defintions from the catalog page
-    int column_count = *catalog_node_column_count(pager_get_page(table->pager, 0), table_num);
+    uint8_t column_count = *catalog_node_column_count(pager_get_page(table->pager, 0), table_num);
+
+    row->value_count = column_count;
+    int offset = 0;
     for (size_t i = 0; i < column_count; i++) {
         uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i * COLUMN_SIZE) +
                                 COLUMN_NAME_SIZE);
         switch (stored_type) {
             case COLUMN_INTEGER:
-                row->values[i].type = COLUMN_INTEGER;
-                memcpy(&row->values[i].integer,
-                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
-                       sizeof(int64_t));
+                row->values[i].type = INTEGER_TYPE;
+                memcpy(&row->values[i].integer, source + offset, sizeof(int64_t));
+                offset += sizeof(int64_t);
                 break;
             case COLUMN_TEXT:
-                row->values[i].type = COLUMN_TEXT;
-                memcpy(&row->values[i].string,
-                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
-                       VALUE_TEXT_MAX_LEN);
+                row->values[i].type = TEXT_TYPE;
+                memcpy(row->values[i].string.text, source + offset, VALUE_TEXT_MAX_LEN);
+                row->values[i].string.length = strnlen(row->values[i].string.text, VALUE_TEXT_MAX_LEN);
+                offset += VALUE_TEXT_MAX_LEN;
                 break;
             case COLUMN_BOOLEAN:
-                row->values[i].type = COLUMN_BOOLEAN;
-                memcpy(&row->values[i].bool_value,
-                       catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (i*COLUMN_SIZE),
-                       1);
+                row->values[i].type = BOOLEAN_TYPE;
+                memcpy(&row->values[i].bool_value, source + offset, 1);
+                offset += 1;
                 break;
         }
     }
