@@ -49,6 +49,7 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
     if (strncasecmp(input_buffer->buffer, ".schema", 7) == 0) {
         char *table_name = input_buffer->buffer + 7;
         print_table_schema(pager,table_name);
+        return DEBUG_AST_SUCCESS;
     }
 
 
@@ -129,6 +130,7 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         }
         else {
             printf("Column(s) entered do not exist!\n");
+            result = COMMAND_SUCCESS;
         }
     }
     else {

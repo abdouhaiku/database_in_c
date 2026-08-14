@@ -560,12 +560,12 @@ bool validate_columns(Table *table, AstNode *tree, uint32_t table_num) {
     }
 
     if (tree->as.select.column_count > 0) {
-        for (size_t i = 0; i < column_count; i++) {
+        for (size_t i = 0; i < tree->as.select.column_count; i++) {
             AstNode *column = tree->as.select.columns[i];
             bool matches = 0;
             for (int j = 0; j < column_count; j++) {
                 char name[32];
-                memcpy(name, page + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
+                memcpy(name, page + TABLE_HEADER_SIZE + (j * COLUMN_SIZE), 32);
                 if (column_name_is(column, name) == 1) {
                     matches = 1;
                     break;
