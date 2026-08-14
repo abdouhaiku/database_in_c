@@ -7,10 +7,10 @@
 #include "command_result.h"
 #include "table.h"
 
-void open_database_and_initialize_catalog(char* filename, Pager *pager) {
+void open_database_and_initialize_catalog(char *filename, Pager *pager) {
     bool is_new_file = (pager->file_length == 0);
     errno = 0;
-    void* page0 = pager_get_page(pager, 0);
+    void *page0 = pager_get_page(pager, 0);
     if (page0 == NULL) {
         perror("Error in getting the page\n");
         pager_close(pager);
@@ -79,7 +79,8 @@ uint32_t leaf_node_find(void *page, int64_t key) {
     return low;
 }
 
-CommandResult leaf_node_insert(Table *table,void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key, const Row *row) {
+CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key,
+                               const Row *row) {
     if (*leaf_node_num_cells(page) >= LEAF_NODE_MAX_CELLS) {
         return LEAF_FULL_ERROR;
     }
@@ -104,7 +105,7 @@ CommandResult leaf_node_insert(Table *table,void *page, uint32_t leaf_page_num, 
 void debug_leaf_node(void *page, Pager *pager) {
     // Search for the first leaf, and keep visiting the next leaf
     void *curr = page;
-    while (*((uint8_t*) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
         curr = pager_get_page(pager, *internal_node_value(curr, 0));
     }
     // curr is the first leaf
@@ -116,7 +117,7 @@ void debug_leaf_node(void *page, Pager *pager) {
             printf("- %lld\n", *leaf_node_key(curr, i));
         }
         i++;
-        uint32_t next_leaf_num = *(uint32_t*)((uint8_t*) curr + NEXT_LEAF_OFFSET);
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
         if (next_leaf_num == 0) break;
         curr = pager_get_page(pager, next_leaf_num);
     }
@@ -170,8 +171,8 @@ uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_
             i--;
         } //Get the associated page from the cell_num=i
         uint32_t child_page_num = (i == num_cells)
-            ? *(uint32_t *) ((uint8_t *) curr + INTERNAL_NODE_RIGHT_CHILD_OFFSET)
-            : *internal_node_value(curr, i);
+                                      ? *(uint32_t *) ((uint8_t *) curr + INTERNAL_NODE_RIGHT_CHILD_OFFSET)
+                                      : *internal_node_value(curr, i);
         *out_page_num = child_page_num;
         curr = (uint8_t *) pager_get_page(pager, child_page_num);
         if (curr == NULL) {
@@ -240,7 +241,7 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     uint32_t mid = INTERNAL_NODE_MAX_KEYS / 2;
     int64_t promoted = temp_keys[mid];
 
-    if (*((uint8_t*)old_page + IS_ROOT_OFFSET) == 1) {
+    if (*((uint8_t *) old_page + IS_ROOT_OFFSET) == 1) {
         // old_page stays root forever, it can't become a child of anything, so
         // both halves need brand-new pages, and old_page itself gets rewritten as the new root.
         uint32_t left_internal_page_num = pager->num_pages;
@@ -266,7 +267,8 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
         }
 
         *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[mid];
-        *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[INTERNAL_NODE_MAX_KEYS + 1];
+        *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[
+            INTERNAL_NODE_MAX_KEYS + 1];
         *internal_node_num_cells(left_internal_page) = mid;
         *internal_node_num_cells(right_internal_page) = INTERNAL_NODE_MAX_KEYS - mid;
         *(uint32_t *) ((uint8_t *) left_internal_page + PARENT_POINTER_OFFSET) = old_page_num;
@@ -299,7 +301,7 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
         return COMMAND_SUCCESS;
     }
 
-    uint32_t* parent_page_num = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+    uint32_t *parent_page_num = (uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
     if (parent_page_num == NULL) {
         return -1;
     }
@@ -328,7 +330,8 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     }
 
     *(uint32_t *) ((uint8_t *) left_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[mid];
-    *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[INTERNAL_NODE_MAX_KEYS + 1];
+    *(uint32_t *) ((uint8_t *) right_internal_page + INTERNAL_NODE_RIGHT_CHILD_OFFSET) = temp_children[
+        INTERNAL_NODE_MAX_KEYS + 1];
 
     // Every child from mid+1 onward (the cell-paired ones plus the trailing right_child)
     // moved from old_page to right_internal_page fix up their own parent pointer to match.
@@ -356,13 +359,14 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
     pager_mark_dirty(pager, right_internal_page_num);
 
     uint32_t new_cell_num = internal_node_find(parent_page, promoted);
-    if (internal_node_insert(pager, parent_page, *parent_page_num, new_cell_num, promoted, old_page_num, right_internal_page_num) ==
+    if (internal_node_insert(pager, parent_page, *parent_page_num, new_cell_num, promoted, old_page_num,
+                             right_internal_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
-            return split_internal_node(pager, parent_page, *parent_page_num, promoted, left_internal_page_num, right_internal_page_num);
-        }
+        return split_internal_node(pager, parent_page, *parent_page_num, promoted, left_internal_page_num,
+                                   right_internal_page_num);
+    }
 
     return COMMAND_SUCCESS;
-
 }
 
 
@@ -404,8 +408,10 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
     uint32_t right_num_cells = LEAF_NODE_MAX_CELLS - mid + 1;
     int is_root_split = *((uint8_t *) old_page + IS_ROOT_OFFSET) == 1;
     *(uint32_t *) ((uint8_t *) right_child_page + PARENT_POINTER_OFFSET) = is_root_split
-        ? old_page_num
-        : *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
+                                                                               ? old_page_num
+                                                                               : *(uint32_t *) (
+                                                                                   (uint8_t *) old_page +
+                                                                                   PARENT_POINTER_OFFSET);
 
     //copy all the right cells to the new leaf
     for (uint32_t index = 0; index < right_num_cells; index++) {
@@ -475,10 +481,11 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
         return -1;
     }
     uint32_t cell_num = internal_node_find(parent_page, promoted.key);
-    if (internal_node_insert(table->pager, parent_page, parent_page_num, cell_num, promoted.key, left_child_page_num, right_child_page_num) ==
+    if (internal_node_insert(table->pager, parent_page, parent_page_num, cell_num, promoted.key, left_child_page_num,
+                             right_child_page_num) ==
         INTERNAL_NODE_FULL_ERROR) {
         return split_internal_node(table->pager, parent_page, parent_page_num,
-            promoted.key, left_child_page_num, right_child_page_num);
+                                   promoted.key, left_child_page_num, right_child_page_num);
     }
 
     return COMMAND_SUCCESS;
@@ -493,7 +500,7 @@ uint32_t *catalog_node_num_tables(void *page) {
     return (uint32_t *) ((uint8_t *) page + TABLE_COUNT_OFFSET);
 }
 
-uint8_t* catalog_node_table(void *page, uint32_t table_num) {
+uint8_t *catalog_node_table(void *page, uint32_t table_num) {
     return (uint8_t *) page + CATALOG_ENTRIES_OFFSET + (table_num * TABLE_ENTRY_SIZE);
 }
 
@@ -510,16 +517,71 @@ uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num) {
 }
 
 // return the cell number in the catalog page
-uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length){
+uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length) {
     //table_name is expected to be from an AST, so the comparison should be a little cautious
-    for (uint32_t i = 0 ; i< *catalog_node_num_tables(page); i++) {
+    for (uint32_t i = 0; i < *catalog_node_num_tables(page); i++) {
         // Get the name of the current table
         char name[32];
         memcpy(&name, catalog_node_table(page, i), 32);
-        if (strlen(name) == table_length && strncasecmp(name, table, table_length) == 0 ) {
+        if (strlen(name) == table_length && strncasecmp(name, table, table_length) == 0) {
             return i;
         }
     }
     // Not found
     return UINT32_MAX;
+}
+
+bool validate_columns(Table *table, AstNode *tree, uint32_t table_num) {
+    void *catalog_page = pager_get_page(table->pager, 0);
+    uint8_t *page = catalog_node_table(catalog_page, table_num);
+    int column_count = *((uint8_t *) page + COLUMN_COUNT_OFFSET);
+    if (tree->as.select.where != NULL) {
+        AstNode *column = tree->as.select.where->as.equals.left;
+        bool matches = 0;
+        for (int i = 0; i < column_count; i++) {
+            char name[32];
+            memcpy(name, page + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
+            if (column_name_is(column, name) == 1) {
+                matches = 1;
+                break;
+            }
+        }
+        if (matches == 0) {
+            //TODO : document about precision in printf
+            printf(
+                "The column %.*s does not exist on the table %.*s",
+                (int) column->as.column.length,
+                column->as.column.name,
+                (int) table->table_length,
+                table->table_name
+            );
+            return false;
+        }
+    }
+
+    if (tree->as.select.column_count > 0) {
+        for (size_t i = 0; i < column_count; i++) {
+            AstNode *column = tree->as.select.columns[i];
+            bool matches = 0;
+            for (int j = 0; j < column_count; j++) {
+                char name[32];
+                memcpy(name, page + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
+                if (column_name_is(column, name) == 1) {
+                    matches = 1;
+                    break;
+                }
+            }
+            if (matches == 0) {
+                printf(
+                    "The column %.*s does not exist on the table %.*s",
+                    (int) column->as.column.length,
+                    column->as.column.name,
+                    (int) table->table_length,
+                    table->table_name
+                );
+                return false;
+            }
+        }
+    }
+    return true;
 }

@@ -34,6 +34,24 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
         debug_ast(sql_query);
         return DEBUG_AST_SUCCESS;
     }
+    if (strncasecmp(input_buffer->buffer, ".tables", 7) == 0) {
+        // List all the tables from the catalog page
+        void *catalog_page = pager_get_page(pager, 0);
+        uint32_t num_of_tables = *catalog_node_num_tables(catalog_page);
+        printf("The list of tables is the following : \n");
+        for (uint32_t i = 0; i< num_of_tables; i++) {
+            char name[32];
+            memcpy(name, (uint8_t*)catalog_page + CATALOG_ENTRIES_OFFSET + (i* TABLE_ENTRY_SIZE), 32);
+            printf("Table %s\n", name);
+        }
+        return DEBUG_AST_SUCCESS;
+    }
+    if (strncasecmp(input_buffer->buffer, ".schema", 7) == 0) {
+        char *table_name = input_buffer->buffer + 7;
+        print_table_schema(pager,table_name);
+    }
+
+
 
     return UNRECOGNIZED_COMMAND;
 }
@@ -105,7 +123,13 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     } else if (tree->as.select.is_star && tree->as.select.where == NULL) {
         result = select_all_command(&table);
     } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
-        result = select_columns_or_filter(&table, tree);
+        //validate columns
+        if (validate_columns(&table, tree, table_num) == true) {
+            result = select_columns_or_filter(&table, tree);
+        }
+        else {
+            printf("Column(s) entered do not exist!\n");
+        }
     }
     else {
         // TODO: SELECT with an explicit column list and/or a WHERE clause

@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "pager.h"
+
 typedef enum {
     COLUMN_INTEGER,
     COLUMN_TEXT,
@@ -86,4 +88,6 @@ struct AstNode {
 void ast_destroy(AstNode *node);
 
 void ast_print(AstNode *node);
+
+void print_table_schema(Pager *pager, char* table_name);
 #endif //DATABASE_IN_C_AST_H

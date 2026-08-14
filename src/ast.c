@@ -7,6 +7,10 @@
 #include "ast.h"
 
 #include <stdio.h>
+#include <string.h>
+
+#include "btree.h"
+#include "pager.h"
 
 void ast_destroy(AstNode *node) {
     if (node == NULL) {
@@ -171,4 +175,38 @@ static void ast_print_node(AstNode *node, int depth) {
 
 void ast_print(AstNode *node) {
     ast_print_node(node, 0);
+}
+
+
+void print_table_schema(Pager *pager, char* table_name) {
+    Token out_token;
+    memset(&out_token, 0, sizeof(Token));
+    Tokenizer tokenizer;
+    tokenizer_init(&tokenizer, table_name);
+    while (out_token.type != TOKEN_IDENTIFIER && out_token.type != TOKEN_EOF) {
+        get_next_token(&tokenizer, &out_token);
+    }
+    if (out_token.type != TOKEN_IDENTIFIER) {
+        printf("Not a real table name, please try again!\n");
+        return;
+    }
+    // Get the catalog page
+    void *catalog_page = pager_get_page(pager, 0);
+    uint32_t table_num = catalog_node_find_table(catalog_page, out_token.text, out_token.text_length);
+    if (table_num == UINT32_MAX) {
+        printf("The table does not exist! \n");
+        return;
+    }
+    int column_count = *catalog_node_column_count(catalog_page, table_num);
+    void* table = catalog_node_table(catalog_page, table_num);
+    for (int i = 0; i<column_count; i++) {
+        char name[32];
+        ColumnType column_type;
+        memcpy(name, (uint8_t*) table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
+        column_type = *((uint8_t*) table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE) + COLUMN_NAME_SIZE);
+
+        printf("Column Name %s, its type is %s\n", name, column_type_name(column_type));
+
+    }
+
 }

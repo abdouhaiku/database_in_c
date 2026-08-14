@@ -8,6 +8,8 @@
 #include <string.h>
 
 #include "ast.h"
+#include "btree.h"
+#include "pager.h"
 #include "parser.h"
 
 int is_digits(const char *str, size_t len)
@@ -292,6 +294,8 @@ void debug_ast(char *sql) {
     ast_print(tree);
     ast_destroy(tree);
 }
+
+
 
 
 

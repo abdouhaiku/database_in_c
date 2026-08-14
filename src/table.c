@@ -171,7 +171,7 @@ CommandResult select_by_id(Table *table, int64_t key) {
 
 // column.name/literal_string.text are borrowed, non-null-terminated pointers
 // into the raw input line.  comparisons must be length-bounded, never strcmp which causes the bug in earlier versions.
-static bool column_name_is(const AstNode *column, const char *name) {
+bool column_name_is(const AstNode *column, const char *name) {
     return column->as.column.length == strlen(name) &&
            strncasecmp(column->as.column.name, name, column->as.column.length) == 0;
 }

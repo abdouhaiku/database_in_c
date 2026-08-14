@@ -57,4 +57,6 @@ CommandResult create_table(Pager *pager, AstNode *tree);
 void serialize_row(const Row *row, uint8_t *destination);
 
 void deserialize_row(const uint8_t *source, Row *row, Table *table);
+
+bool column_name_is(const AstNode *column, const char *name);
 #endif //DATABASE_IN_C_TABLE_H
