@@ -62,9 +62,9 @@ bool column_name_is(const AstNode *column, const char *name);
 
 bool table_scan_next(Cursor *cursor, Table *table, Row *out_row);
 
-bool pk_lookup_next(Cursor *cursor, Pager *pager, Row *out_row);
+bool pk_lookup_next(Cursor *cursor, Table *table, Row *out_row);
 
-bool filter_next(Cursor *cursor, Pager *pager, Row *out_row);
+bool filter_next(Cursor *cursor, Table *table, Row *out_row);
 
 bool projection_next(Cursor *cursor, Pager *pager, Row *out_row);
 #endif //DATABASE_IN_C_TABLE_H

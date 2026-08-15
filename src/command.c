@@ -124,9 +124,20 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     Cursor *cursor = malloc(sizeof(Cursor));
     build_cursor(cursor, plan_node);
 
-    //TODO : implement the loop 
-    /*
     CommandResult result;
+    if (tree->type == AST_INSERT) {
+        result = insert_command(tree, &table);
+    }
+    if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
+        if (!validate_columns(&table, tree, table_num)) {
+            printf("Column(s) entered do not exist!\n");
+            result = COMMAND_SUCCESS;
+        }
+    }
+
+
+    //TODO : implement the loop
+    /*
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, &table);
     } else if (tree->as.select.is_star && tree->as.select.where == NULL) {
@@ -146,6 +157,10 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         // needs new execution functions only SELECT * is wired up so far.
         printf("This SELECT form isn't supported yet ");
         result = COMMAND_SUCCESS;
+    }
+
+    while (cursor_next(root_cursor, &row, pager)) {
+        print(&row);
     }
     */
     ast_destroy(tree);
