@@ -119,16 +119,15 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
 
     // Build Plan
     PlanNode *plan_node = malloc(sizeof(PlanNode));
-    build_plan(plan_node, tree, table);
+    build_plan(plan_node, tree, &table);
 
     Cursor *cursor = malloc(sizeof(Cursor));
     build_cursor(cursor, plan_node);
 
-    CommandResult result;
+    CommandResult result = COMMAND_SUCCESS;
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, &table);
-    }
-    if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
+    } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
         if (!validate_columns(&table, tree, table_num)) {
             printf("Column(s) entered do not exist!\n");
             result = COMMAND_SUCCESS;

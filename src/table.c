@@ -406,81 +406,46 @@ bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
 }
 
 bool pk_lookup_next(Cursor *cursor, Table *table, Row *out_row) {
-    if (cursor->as.table_scan.done) {
+    if (cursor->as.pk_lookup.done) {
         return false;
     }
     int64_t key = cursor->as.pk_lookup.key;
-    void *curr = pager_get_page(table->pager, cursor->as.pk_lookup.root_page_num);
-    if (curr == NULL) {
+    void *root_page = pager_get_page(table->pager, cursor->as.pk_lookup.root_page_num);
+    if (root_page == NULL) {
         return false;
     }
     uint32_t out_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num), key,
-                                        &out_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, root_page, key, &out_page_num);
     uint32_t cell_num = leaf_node_find(leaf_page, key);
     if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
-        printf("No ID matches this key %ld", key);
         cursor->as.pk_lookup.done = true;
         return false;
     }
-    Row row;
-    deserialize_row(leaf_node_value(leaf_page, cell_num), &row, table);
+    deserialize_row(leaf_node_value(leaf_page, cell_num), out_row, table);
     cursor->as.pk_lookup.done = true;
     return true;
 }
 
-void cursor_next(Cursor *cursor, Row *row, Table *table) {
+bool cursor_next(Cursor *cursor, Table *table, Row *out_row) {
     switch (cursor->type) {
         case CURSOR_TABLE_SCAN:
-            table_scan_next(cursor, table, row);
-            break;
+            return table_scan_next(cursor, table, out_row);
+        case CURSOR_PK_LOOKUP:
+            return pk_lookup_next(cursor, table, out_row);
+        case CURSOR_FILTER:
+            return filter_next(cursor, table, out_row);
     }
+    return false; // CURSOR_PROJECTION not implemented yet
 }
 
 
 bool filter_next(Cursor *cursor, Table *table, Row *out_row) {
     void *catalog_page = pager_get_page(table->pager, 0);
     uint32_t table_num = catalog_node_find_table(catalog_page, table->table_name, table->table_length);
-    if (cursor->as.table_scan.done) {
-        return false;
-    }
-    uint32_t page_num = cursor->as.filter.child->as.table_scan.current_page_num;
-    uint32_t cell_num = cursor->as.filter.child->as.table_scan.current_cell_num;
-
-    void *curr = pager_get_page(table->pager, page_num);
-    if (curr == NULL) {
-        return false;
-    }
-    uint32_t num_cells = *leaf_node_num_cells(curr);
-    if (cell_num >= num_cells) {
-        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
-        if (next_leaf_num == 0) {
-            cursor->as.filter.child->as.table_scan.done = true;
-            return false;
+    while (cursor_next(cursor->as.filter.child, table, out_row)) {
+        if (row_matches_where(cursor->as.filter.condition, out_row, catalog_page, table_num)) {
+            return true;
         }
-        page_num = next_leaf_num;
-        curr = pager_get_page(table->pager, page_num);
-        if (curr == NULL) {
-            return false;
-        }
-        cell_num = 0;
     }
-
-    while (curr != NULL) {
-        for (uint32_t i = 0; i < num_cells; i++) {
-            deserialize_row(leaf_node_value(curr, i), out_row, table);
-            if (row_matches_where(cursor->as.filter.condition, out_row, catalog_page, table_num)) {
-                cursor->as.filter.child->as.table_scan.current_page_num = page_num;
-                cursor->as.filter.child->as.table_scan.current_cell_num = i;
-                cursor->as.filter.child->as.table_scan.done = false;
-                return true;
-            }
-        }
-        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
-        if (next_leaf_num == 0) break;
-        page_num = next_leaf_num;
-        curr = pager_get_page(table->pager, next_leaf_num);
-    }
-    cursor->as.filter.child->as.table_scan.done = true;
-    return true;
+    return false;
 }
