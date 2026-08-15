@@ -370,3 +370,29 @@ void deserialize_row(const uint8_t *source, Row *row, Table *table) {
         }
     }
 }
+
+
+bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
+
+    // Get the page number
+    uint32_t cell_num = cursor->as.table_scan.current_cell_num;
+    uint32_t page_num = cursor->as.table_scan.current_page_num;
+
+    void *curr = pager_get_page(table->pager, page_num);
+    if (curr == NULL) {
+        return false;
+    }
+    uint32_t num_cells = *leaf_node_num_cells(curr);
+    if (cell_num > num_cells) {
+        page_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+        curr = pager_get_page(table->pager, page_num);
+        if (curr == NULL) {
+            return -1;
+        }
+        cell_num = 0;
+    }
+    deserialize_row(leaf_node_value(curr, cell_num), out_row, table);
+    cursor->as.table_scan.current_page_num = page_num;
+    cursor->as.table_scan.current_cell_num = cell_num + 1;
+    return true;
+}

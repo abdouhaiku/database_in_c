@@ -121,6 +121,11 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     PlanNode *plan_node = malloc(sizeof(PlanNode));
     build_plan(plan_node, tree, table);
 
+    Cursor *cursor = malloc(sizeof(Cursor));
+    build_cursor(cursor, plan_node);
+
+    //TODO : implement the loop 
+    /*
     CommandResult result;
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, &table);
@@ -142,6 +147,7 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         printf("This SELECT form isn't supported yet ");
         result = COMMAND_SUCCESS;
     }
+    */
     ast_destroy(tree);
     return result;
 }

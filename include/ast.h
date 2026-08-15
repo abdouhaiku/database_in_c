@@ -175,5 +175,4 @@ void ast_print(AstNode *node);
 void print_table_schema(Pager *pager, char* table_name);
 
 void plan_destroy(PlanNode *node);
-
 #endif //DATABASE_IN_C_AST_H
