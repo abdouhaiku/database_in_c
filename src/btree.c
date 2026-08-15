@@ -161,9 +161,9 @@ uint32_t internal_node_find(void *page, int64_t key) {
     return low;
 }
 
-uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num) {
+uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num, uint32_t page_num) {
     uint8_t *curr = page; // page is the root node
-    *out_page_num = 0;
+    *out_page_num = page_num;
     while (*(curr + NODE_TYPE_OFFSET) != NODE_LEAF) {
         uint32_t num_cells = *internal_node_num_cells(curr);
         uint32_t i = num_cells;
@@ -439,7 +439,7 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
         *leaf_node_num_cells(left_child) = mid;
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         //Update the parent of the left child
-        *(uint32_t *) ((uint8_t *) left_child + PARENT_POINTER_OFFSET) = 0;
+        *(uint32_t *) ((uint8_t *) left_child + PARENT_POINTER_OFFSET) = old_page_num;
         pager_mark_dirty(table->pager, left_child_page_num);
 
         // Reset the old page which is the new root

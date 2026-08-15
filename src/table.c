@@ -51,7 +51,7 @@ CommandResult insert_command(AstNode *tree, Table *table) {
 
     uint32_t leaf_page_num;
     void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num),
-                                        primary_key, &leaf_page_num);
+                                        primary_key, &leaf_page_num, table->root_page_num);
 
     if (leaf_page == NULL) {
         printf("Could not get the leaf page\n");
@@ -246,6 +246,14 @@ bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
     if (curr == NULL) {
         return false;
     }
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        page_num = *internal_node_value(curr, 0);
+        curr = pager_get_page(table->pager, page_num);
+        if (curr == NULL) {
+            return false;
+        }
+        cell_num = 0;
+    }
     uint32_t num_cells = *leaf_node_num_cells(curr);
     if (cell_num >= num_cells) {
         uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
@@ -276,7 +284,7 @@ bool pk_lookup_next(Cursor *cursor, Table *table, Row *out_row) {
         return false;
     }
     uint32_t out_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, root_page, key, &out_page_num);
+    void *leaf_page = leaf_node_for_key(table->pager, root_page, key, &out_page_num, cursor->as.pk_lookup.root_page_num);
     uint32_t cell_num = leaf_node_find(leaf_page, key);
     if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
         cursor->as.pk_lookup.done = true;

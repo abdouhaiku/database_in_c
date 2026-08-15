@@ -20,9 +20,10 @@ fi
 rm -f db.bin
 
 {
+    echo "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);"
     for ((i = 1; i <= ROW_COUNT; i++)); do
-        echo "insert $i alice alice@example.com"
+        echo "INSERT INTO users VALUES ($i, 'alice');"
     done
-    echo "select"
+    echo "SELECT * FROM users;"
     echo ".btree"
 } | "$BINARY"

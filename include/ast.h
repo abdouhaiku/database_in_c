@@ -9,7 +9,10 @@
 #include <stdint.h>
 
 #include "pager.h"
-#include "table.h"
+
+typedef struct Table Table; // forward-declared: ast.h only ever needs Table*, not
+                             // the full definition, so including table.h here would just recreate the include cycle
+                             // (table.h includes ast.h for AstNode/Cursor/MAX_TABLE_COLUMNS).
 
 typedef enum {
     COLUMN_INTEGER,

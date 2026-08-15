@@ -90,7 +90,7 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
 CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);
 
-uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num);
+uint8_t *leaf_node_for_key(Pager *pager, void *page, int64_t key, uint32_t *out_page_num, uint32_t page_num);
 
 void catalog_node_init(void *page);
 
