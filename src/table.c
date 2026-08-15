@@ -373,6 +373,9 @@ void deserialize_row(const uint8_t *source, Row *row, Table *table) {
 
 
 bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
+    if (cursor->as.table_scan.done) {
+        return false;
+    }
 
     // Get the page number
     uint32_t cell_num = cursor->as.table_scan.current_cell_num;
@@ -383,11 +386,16 @@ bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
         return false;
     }
     uint32_t num_cells = *leaf_node_num_cells(curr);
-    if (cell_num > num_cells) {
-        page_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+    if (cell_num >= num_cells) {
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) {
+            cursor->as.table_scan.done = true;
+            return false;
+        }
+        page_num = next_leaf_num;
         curr = pager_get_page(table->pager, page_num);
         if (curr == NULL) {
-            return -1;
+            return false;
         }
         cell_num = 0;
     }
