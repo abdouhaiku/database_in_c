@@ -128,7 +128,45 @@ typedef struct PlanNode {
     } as;
 } PlanNode;
 
+typedef enum {
+    CURSOR_TABLE_SCAN,
+    CURSOR_PK_LOOKUP,
+    CURSOR_FILTER,
+    CURSOR_PROJECTION
+} CursorType;
+
+typedef struct Cursor {
+    CursorType type;
+
+    union {
+        struct {
+            uint32_t current_page_num;
+            uint32_t current_cell_num;
+            bool done;
+        } table_scan;
+
+        struct {
+            uint32_t root_page_num;
+            int64_t key;
+            bool done;
+        } pk_lookup;
+
+        struct {
+            struct Cursor *child;
+            AstNode *condition;
+        } filter;
+
+        struct {
+            struct Cursor *child;
+            AstNode **columns;
+            size_t column_count;
+        } projection;
+    } as;
+} Cursor;
+
 void build_plan(PlanNode* plan_node, AstNode *tree, Table* table);
+
+void build_cursor(Cursor* cursor, PlanNode *plan);
 
 void ast_destroy(AstNode *node);
 
@@ -136,6 +174,6 @@ void ast_print(AstNode *node);
 
 void print_table_schema(Pager *pager, char* table_name);
 
-void plan_destroy(PlanNode *node); 
+void plan_destroy(PlanNode *node);
 
 #endif //DATABASE_IN_C_AST_H

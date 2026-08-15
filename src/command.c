@@ -117,6 +117,9 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         .table_length = tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     };
 
+    // Build Plan
+    PlanNode *plan_node = malloc(sizeof(PlanNode));
+    build_plan(plan_node, tree, table);
 
     CommandResult result;
     if (tree->type == AST_INSERT) {

@@ -290,3 +290,37 @@ void plan_destroy(PlanNode *node) {
     }
     free(node);
 }
+
+void build_cursor(Cursor* cursor, PlanNode *plan) {
+    switch (plan->type) {
+        case PLAN_TABLE_SCAN:
+            cursor->type = CURSOR_TABLE_SCAN;
+            cursor->as.table_scan.current_page_num = plan->as.table_scan.root_page_num;
+            cursor->as.table_scan.current_cell_num = 0;
+            cursor->as.table_scan.done = false;
+            break;
+        case PLAN_PK_LOOKUP :
+            cursor->type = CURSOR_PK_LOOKUP;
+            cursor->as.pk_lookup.root_page_num = plan->as.pk_lookup.root_page_num;
+            cursor->as.pk_lookup.key = plan->as.pk_lookup.key;
+            cursor->as.pk_lookup.done = false;
+            break;
+        case PLAN_FILTER : {
+            cursor->type = CURSOR_FILTER;
+            Cursor *child = malloc(sizeof(Cursor));
+            build_cursor(child, plan->as.filter.child);
+            cursor->as.filter.child = child;
+            cursor->as.filter.condition = plan->as.filter.condition;
+            break;
+        }
+        case PLAN_PROJECTION: {
+            cursor->type = CURSOR_PROJECTION;
+            Cursor *child = malloc(sizeof(Cursor));
+            build_cursor(child, plan->as.projection.child);
+            cursor->as.projection.child = child;
+            cursor->as.projection.columns = plan->as.projection.columns;
+            cursor->as.projection.column_count = plan->as.projection.column_count;
+            break;
+        }
+    }
+}
