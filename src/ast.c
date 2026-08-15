@@ -324,3 +324,22 @@ void build_cursor(Cursor* cursor, PlanNode *plan) {
         }
     }
 }
+
+void cursor_destroy(Cursor *cursor) {
+    if (cursor == NULL) {
+        return;
+    }
+
+    switch (cursor->type) {
+        case CURSOR_TABLE_SCAN:
+        case CURSOR_PK_LOOKUP:
+            break;
+        case CURSOR_FILTER:
+            cursor_destroy(cursor->as.filter.child);
+            break;
+        case CURSOR_PROJECTION:
+            cursor_destroy(cursor->as.projection.child);
+            break;
+    }
+    free(cursor);
+}

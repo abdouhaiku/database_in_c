@@ -46,12 +46,6 @@ typedef struct {
 
 CommandResult insert_command(AstNode *tree, Table *table);
 
-CommandResult select_all_command(Table *table);
-
-CommandResult select_by_id(Table *table, int64_t key);
-
-CommandResult select_columns_or_filter(Table *table, AstNode *tree);
-
 CommandResult create_table(Pager *pager, AstNode *tree);
 
 void serialize_row(const Row *row, uint8_t *destination);
@@ -66,7 +60,7 @@ bool pk_lookup_next(Cursor *cursor, Table *table, Row *out_row);
 
 bool filter_next(Cursor *cursor, Table *table, Row *out_row);
 
-bool projection_next(Cursor *cursor, Pager *pager, Row *out_row);
+bool projection_next(Cursor *cursor, Table *table, Row *out_row);
 
 bool cursor_next(Cursor *cursor, Table *table, Row *out_row);
 #endif //DATABASE_IN_C_TABLE_H

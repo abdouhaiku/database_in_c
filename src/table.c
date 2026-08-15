@@ -98,77 +98,6 @@ CommandResult insert_command(AstNode *tree, Table *table) {
     return COMMAND_SUCCESS;
 }
 
-CommandResult select_all_command(Table *table) {
-    // Find the first leaf
-    void *curr = pager_get_page(table->pager, table->root_page_num);
-    if (curr == NULL) {
-        return -1;
-    }
-    uint32_t current_count = 0;
-    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
-        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
-    }
-    // curr is the first leaf node page
-    while (curr != NULL) {
-        uint32_t num_cells = *leaf_node_num_cells(curr);
-        for (uint32_t i = 0; i < num_cells; i++) {
-            Row row;
-            deserialize_row(leaf_node_value(curr, i), &row, table);
-            printf("Row %u : ", current_count);
-            for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
-                switch (row.values[row_idx].type) {
-                    case INTEGER_TYPE:
-                        printf("%ld ", row.values[row_idx].integer);
-                        break;
-                    case TEXT_TYPE:
-                        printf("%s ", row.values[row_idx].string.text);
-                        break;
-                    case BOOLEAN_TYPE:
-                        row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
-                        break;
-                }
-            }
-            printf("\n");
-            current_count++;
-        }
-        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
-        if (next_leaf_num == 0) break;
-        curr = pager_get_page(table->pager, next_leaf_num);
-    }
-
-    return COMMAND_SUCCESS;
-}
-
-CommandResult select_by_id(Table *table, int64_t key) {
-    uint32_t out_page_num;
-    void *leaf_page = leaf_node_for_key(table->pager, pager_get_page(table->pager, table->root_page_num), key,
-                                        &out_page_num);
-    uint32_t cell_num = leaf_node_find(leaf_page, key);
-    if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
-        printf("No ID matches this key %ld", key);
-        return -1;
-    }
-    Row row;
-    deserialize_row(leaf_node_value(leaf_page, cell_num), &row, table);
-    printf("Row that matches the ID %ld is :", key);
-    for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
-        switch (row.values[row_idx].type) {
-            case INTEGER_TYPE:
-                printf("%ld ", row.values[row_idx].integer);
-                break;
-            case TEXT_TYPE:
-                printf("%s ", row.values[row_idx].string.text);
-                break;
-            case BOOLEAN_TYPE:
-                row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
-                break;
-        }
-    }
-    printf("\n");
-
-    return COMMAND_SUCCESS;
-}
-
 // column.name/literal_string.text are borrowed, non-null-terminated pointers
 // into the raw input line.  comparisons must be length-bounded, never strcmp which causes the bug in earlier versions.
 bool column_name_is(const AstNode *column, const char *name) {
@@ -203,74 +132,6 @@ static bool row_matches_where(const AstNode *where, const Row *row, void *catalo
         }
     }
     return false;
-}
-
-CommandResult select_columns_or_filter(Table *table, AstNode *tree) {
-    // Find the first leaf
-    void *curr = pager_get_page(table->pager, table->root_page_num);
-    if (curr == NULL) {
-        return -1;
-    }
-    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
-        curr = pager_get_page(table->pager, *internal_node_value(curr, 0));
-    }
-    while (curr != NULL) {
-        uint32_t num_cells = *leaf_node_num_cells(curr);
-        for (uint32_t i = 0; i < num_cells; i++) {
-            Row row;
-            void *catalog_page = pager_get_page(table->pager, 0);
-            uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.select.table,
-                                                         tree->as.select.table_length);
-            deserialize_row(leaf_node_value(curr, i), &row, table);
-            if (!row_matches_where(tree->as.select.where, &row, catalog_page, table_num)) {
-                continue;
-            }
-            // Get the columns names
-            if (tree->as.select.column_count > 0) {
-                for (size_t col_idx = 0; col_idx < tree->as.select.column_count; col_idx++) {
-                    AstNode *column = tree->as.select.columns[col_idx];
-                    for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
-                        char column_name[32];
-                        memcpy(&column_name, catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET +
-                               (row_idx*COLUMN_SIZE), 32);
-                        if (column_name_is(column, column_name)) {
-                            switch (row.values[row_idx].type) {
-                                case INTEGER_TYPE:
-                                    printf("%ld ", row.values[row_idx].integer);
-                                    break;
-                                case TEXT_TYPE:
-                                    printf("%s ", row.values[row_idx].string.text);
-                                    break;
-                                case BOOLEAN_TYPE:
-                                    row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
-                                    break;
-                            }
-                        }
-                    }
-                }
-                printf("\n");
-            } else {
-                for (size_t row_idx = 0; row_idx < row.value_count; row_idx++) {
-                    switch (row.values[row_idx].type) {
-                        case INTEGER_TYPE:
-                            printf("%ld ", row.values[row_idx].integer);
-                            break;
-                        case TEXT_TYPE:
-                            printf("%s ", row.values[row_idx].string.text);
-                            break;
-                        case BOOLEAN_TYPE:
-                            row.values[row_idx].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
-                            break;
-                    }
-                }
-                printf("\n");
-            }
-        }
-        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
-        if (next_leaf_num == 0) break;
-        curr = pager_get_page(table->pager, next_leaf_num);
-    }
-    return COMMAND_SUCCESS;
 }
 
 CommandResult create_table(Pager *pager, AstNode *tree) {
@@ -434,8 +295,10 @@ bool cursor_next(Cursor *cursor, Table *table, Row *out_row) {
             return pk_lookup_next(cursor, table, out_row);
         case CURSOR_FILTER:
             return filter_next(cursor, table, out_row);
+        case CURSOR_PROJECTION:
+            return projection_next(cursor, table, out_row);
     }
-    return false; // CURSOR_PROJECTION not implemented yet
+    return false;
 }
 
 
@@ -448,4 +311,29 @@ bool filter_next(Cursor *cursor, Table *table, Row *out_row) {
         }
     }
     return false;
+}
+
+bool projection_next(Cursor *cursor, Table *table, Row *out_row) {
+    Row full_row;
+    if (!cursor_next(cursor->as.projection.child, table, &full_row)) {
+        return false;
+    }
+
+    void *catalog_page = pager_get_page(table->pager, 0);
+    uint32_t table_num = catalog_node_find_table(catalog_page, table->table_name, table->table_length);
+    uint8_t *catalog_entry = catalog_node_table(catalog_page, table_num);
+
+    out_row->value_count = cursor->as.projection.column_count;
+    for (size_t i = 0; i < cursor->as.projection.column_count; i++) {
+        AstNode *column = cursor->as.projection.columns[i];
+        for (size_t j = 0; j < full_row.value_count; j++) {
+            char name[32];
+            memcpy(name, catalog_entry + TABLE_COLUMNS_OFFSET + (j * COLUMN_SIZE), 32);
+            if (column_name_is(column, name)) {
+                out_row->values[i] = full_row.values[j];
+                break;
+            }
+        }
+    }
+    return true;
 }

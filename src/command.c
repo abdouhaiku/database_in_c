@@ -121,47 +121,37 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     PlanNode *plan_node = malloc(sizeof(PlanNode));
     build_plan(plan_node, tree, &table);
 
-    Cursor *cursor = malloc(sizeof(Cursor));
-    build_cursor(cursor, plan_node);
-
     CommandResult result = COMMAND_SUCCESS;
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, &table);
-    } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
-        if (!validate_columns(&table, tree, table_num)) {
-            printf("Column(s) entered do not exist!\n");
-            result = COMMAND_SUCCESS;
+    } else if ((tree->as.select.where != NULL || tree->as.select.column_count > 0)
+               && !validate_columns(&table, tree, table_num)) {
+        printf("Column(s) entered do not exist!\n");
+    } else {
+        Cursor *cursor = malloc(sizeof(Cursor));
+        build_cursor(cursor, plan_node);
+
+        Row row;
+        while (cursor_next(cursor, &table, &row)) {
+            for (size_t i = 0; i < row.value_count; i++) {
+                switch (row.values[i].type) {
+                    case INTEGER_TYPE:
+                        printf("%ld ", row.values[i].integer);
+                        break;
+                    case TEXT_TYPE:
+                        printf("%s ", row.values[i].string.text);
+                        break;
+                    case BOOLEAN_TYPE:
+                        row.values[i].bool_value == 1 ? printf("TRUE ") : printf("FALSE ");
+                        break;
+                }
+            }
+            printf("\n");
         }
+        cursor_destroy(cursor);
     }
 
-
-    //TODO : implement the loop
-    /*
-    if (tree->type == AST_INSERT) {
-        result = insert_command(tree, &table);
-    } else if (tree->as.select.is_star && tree->as.select.where == NULL) {
-        result = select_all_command(&table);
-    } else if (tree->as.select.where != NULL || tree->as.select.column_count > 0) {
-        //validate columns
-        if (validate_columns(&table, tree, table_num) == true) {
-            result = select_columns_or_filter(&table, tree);
-        }
-        else {
-            printf("Column(s) entered do not exist!\n");
-            result = COMMAND_SUCCESS;
-        }
-    }
-    else {
-        // TODO: SELECT with an explicit column list and/or a WHERE clause
-        // needs new execution functions only SELECT * is wired up so far.
-        printf("This SELECT form isn't supported yet ");
-        result = COMMAND_SUCCESS;
-    }
-
-    while (cursor_next(root_cursor, &row, pager)) {
-        print(&row);
-    }
-    */
+    plan_destroy(plan_node);
     ast_destroy(tree);
     return result;
 }

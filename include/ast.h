@@ -168,6 +168,8 @@ void build_plan(PlanNode* plan_node, AstNode *tree, Table* table);
 
 void build_cursor(Cursor* cursor, PlanNode *plan);
 
+void cursor_destroy(Cursor *cursor);
+
 void ast_destroy(AstNode *node);
 
 void ast_print(AstNode *node);
