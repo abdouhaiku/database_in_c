@@ -520,7 +520,7 @@ bool is_primary_key(void *page, uint32_t table_num, const char* column_name, siz
     // Get the primary key index
     int primary_key_index = *catalog_node_primary_key_column(page, table_num);
     char name[32];
-    memcpy(name, catalog_node_table(page, table_num) + CATALOG_ENTRIES_OFFSET + (TABLE_ENTRY_SIZE * table_num) + (COLUMN_SIZE * primary_key_index), 32);
+    memcpy(name, catalog_node_table(page, table_num) + TABLE_COLUMNS_OFFSET + (COLUMN_SIZE * primary_key_index), 32);
     return column_length == strlen(name) &&
        strncasecmp(column_name, name, column_length) == 0;
 
