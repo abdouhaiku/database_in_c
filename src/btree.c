@@ -516,6 +516,16 @@ uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num) {
     return catalog_node_table(page, table_num) + PRIMARY_KEY_COLUMN_OFFSET;
 }
 
+bool is_primary_key(void *page, uint32_t table_num, const char* column_name, size_t column_length) {
+    // Get the primary key index
+    int primary_key_index = *catalog_node_primary_key_column(page, table_num);
+    char name[32];
+    memcpy(name, catalog_node_table(page, table_num) + CATALOG_ENTRIES_OFFSET + (TABLE_ENTRY_SIZE * table_num) + (COLUMN_SIZE * primary_key_index), 32);
+    return column_length == strlen(name) &&
+       strncasecmp(column_name, name, column_length) == 0;
+
+}
+
 // return the cell number in the catalog page
 uint32_t catalog_node_find_table(void *page, const char *table, size_t table_length) {
     //table_name is expected to be from an AST, so the comparison should be a little cautious

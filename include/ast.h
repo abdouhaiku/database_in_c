@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "pager.h"
+#include "table.h"
 
 typedef enum {
     COLUMN_INTEGER,
@@ -57,6 +58,7 @@ typedef enum {
 } AstNodeType;
 
 typedef struct AstNode AstNode;
+typedef struct PlanNode PlanNode;
 
 struct AstNode {
     AstNodeType type;
@@ -85,9 +87,55 @@ struct AstNode {
     } as;
 };
 
+typedef struct { const char *name; size_t length; } Column;
+
+typedef enum {
+    PLAN_TABLE_SCAN,
+    PLAN_PK_LOOKUP,
+    PLAN_FILTER,
+    PLAN_PROJECTION,
+    PLAN_INSERT
+} PlanNodeType;
+
+typedef struct PlanNode {
+    PlanNodeType type;
+    union {
+        struct {
+            uint32_t root_page_num;
+        } table_scan;
+
+        struct {
+            uint32_t root_page_num;
+            int64_t key;
+        } pk_lookup;
+
+        struct {
+            struct PlanNode *child;
+            AstNode *condition;      // points at the WHERE clause's EXPR_EQUALS node
+        } filter;
+
+        struct {
+            struct PlanNode *child;
+            AstNode **columns;       // points at tree->as.select.columns
+            size_t column_count;
+        } projection;
+
+        struct {
+            uint32_t root_page_num;
+            AstNode **values;        // points at tree->as.insert.values
+            size_t value_count;
+        } insert;
+    } as;
+} PlanNode;
+
+void build_plan(PlanNode* plan_node, AstNode *tree, Table* table);
+
 void ast_destroy(AstNode *node);
 
 void ast_print(AstNode *node);
 
 void print_table_schema(Pager *pager, char* table_name);
+
+void plan_destroy(PlanNode *node); 
+
 #endif //DATABASE_IN_C_AST_H

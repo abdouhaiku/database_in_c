@@ -50,7 +50,7 @@ void ast_destroy(AstNode *node) {
     free(node);
 }
 
-char* ast_node_type_by_name(AstNodeType type) {
+char *ast_node_type_by_name(AstNodeType type) {
     switch (type) {
         case AST_INSERT:
             return "AST_INSERT";
@@ -77,7 +77,7 @@ char* ast_node_type_by_name(AstNodeType type) {
 static const char *column_type_name(ColumnType type) {
     switch (type) {
         case COLUMN_INTEGER: return "INTEGER";
-        case COLUMN_TEXT:    return "TEXT";
+        case COLUMN_TEXT: return "TEXT";
         case COLUMN_BOOLEAN: return "BOOLEAN";
     }
     return "UNKNOWN";
@@ -178,7 +178,7 @@ void ast_print(AstNode *node) {
 }
 
 
-void print_table_schema(Pager *pager, char* table_name) {
+void print_table_schema(Pager *pager, char *table_name) {
     Token out_token;
     memset(&out_token, 0, sizeof(Token));
     Tokenizer tokenizer;
@@ -198,15 +198,91 @@ void print_table_schema(Pager *pager, char* table_name) {
         return;
     }
     int column_count = *catalog_node_column_count(catalog_page, table_num);
-    void* table = catalog_node_table(catalog_page, table_num);
-    for (int i = 0; i<column_count; i++) {
+    void *table = catalog_node_table(catalog_page, table_num);
+    for (int i = 0; i < column_count; i++) {
         char name[32];
         ColumnType column_type;
         memcpy(name, (uint8_t*) table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
-        column_type = *((uint8_t*) table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE) + COLUMN_NAME_SIZE);
+        column_type = *((uint8_t *) table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE) + COLUMN_NAME_SIZE);
 
         printf("Column Name %s, its type is %s\n", name, column_type_name(column_type));
+    }
+}
 
+void build_plan(PlanNode *plan_node, AstNode *tree, Table *table) {
+    void *catalog_page = pager_get_page(table->pager, 0);
+    switch (tree->type) {
+        case AST_INSERT:
+            plan_node->type = PLAN_INSERT;
+            // Get the table root page num
+            plan_node->as.insert.root_page_num = table->root_page_num;
+            plan_node->as.insert.values = tree->as.insert.values;
+            plan_node->as.insert.value_count = tree->as.insert.values_count;
+            break;
+        case AST_SELECT:
+            PlanNode *table_scan = malloc(sizeof(PlanNode));
+            table_scan->type = PLAN_TABLE_SCAN;
+            table_scan->as.table_scan.root_page_num = table->root_page_num;
+            if (tree->as.select.column_count > 0) {
+                plan_node->type = PLAN_PROJECTION;
+                plan_node->as.projection.column_count = tree->as.select.column_count;
+                plan_node->as.projection.columns = tree->as.select.columns;
+                if (tree->as.select.where != NULL) {
+                    PlanNode *where_child = malloc(sizeof(PlanNode));
+                    // Check if the key is primary
+                    if (is_primary_key(catalog_page, table->root_page_num,
+                                       tree->as.select.where->as.equals.left->as.literal_string.text,
+                                       tree->as.select.where->as.equals.left->as.literal_string.length)) {
+                        where_child->as.pk_lookup.key = tree->as.select.where->as.equals.right->as.literal_int;
+                        where_child->type = PLAN_PK_LOOKUP;
+                        where_child->as.pk_lookup.root_page_num = table->root_page_num;
+                        free(table_scan); // since it wont be used
+                    } else {
+                        where_child->type = PLAN_FILTER;
+                        where_child->as.filter.condition = tree->as.select.where;
+                        where_child->as.filter.child = table_scan;
+                        plan_node->as.projection.child = where_child;
+                    }
+                } else {
+                    plan_node->as.projection.child = table_scan;
+                }
+            } else if (tree->as.select.where != NULL) {
+                if (is_primary_key(catalog_page, table->root_page_num,
+                                   tree->as.select.where->as.equals.left->as.literal_string.text,
+                                   tree->as.select.where->as.equals.left->as.literal_string.length)) {
+                    plan_node->type = PLAN_PK_LOOKUP;
+                    plan_node->as.pk_lookup.key = tree->as.select.where->as.equals.right->as.literal_int;
+                    plan_node->as.pk_lookup.root_page_num = table->root_page_num;
+                    free(table_scan);
+                } else {
+                    plan_node->type = PLAN_FILTER;
+                    plan_node->as.filter.condition = tree->as.select.where;
+                    plan_node->as.filter.child = table_scan;
+                }
+            } else {
+                plan_node->type = PLAN_TABLE_SCAN;
+                plan_node->as.table_scan.root_page_num = table->root_page_num;
+            }
+            break;
+    }
+}
+
+void plan_destroy(PlanNode *node) {
+    if (node == NULL) {
+        return;
     }
 
+    switch (node->type) {
+        case PLAN_PK_LOOKUP:
+        case PLAN_TABLE_SCAN:
+        case PLAN_INSERT:
+            break;
+        case PLAN_FILTER:
+            plan_destroy(node->as.filter.child);
+            break;
+        case PLAN_PROJECTION:
+            plan_destroy(node->as.projection.child);
+            break;
+    }
+    free(node);
 }
