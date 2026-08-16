@@ -170,6 +170,126 @@ AstNode *parse_select_statement(Parser *parser) {
     return node;
 }
 
+/*
+UPDATE table_name
+SET column1 = value1, column2 = value2
+WHERE condition;
+*/
+AstNode *parse_update_statement(Parser *parser) {
+    if (parser->current.type != TOKEN_UPDATE) {
+        parser_set_error(parser, "UPDATE");
+        return NULL;
+    }
+    AstNode *node = malloc(sizeof(AstNode));
+    node->type = AST_UPDATE;
+    node->as.update_table.column_count = 0;
+    node->as.update_table.values_count = 0;
+    parser_advance(parser);
+
+    if (parser->current.type !=TOKEN_IDENTIFIER) {
+        parser_set_error(parser, "a table name");
+        ast_destroy(node);
+        return NULL;
+    }
+    node->as.create_table.table = parser->current.text;
+    node->as.create_table.table_length = parser->current.text_length;
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_SET) {
+        parser_set_error(parser, "SET keyword");
+        ast_destroy(node);
+        return NULL;
+    }
+
+    parser_advance(parser);
+
+    while (parser->current.type != TOKEN_EOF && parser->current.type != TOKEN_WHERE) {
+        if (parser->current.type != TOKEN_IDENTIFIER) {
+            // Unexpected token where a column name or comma was expected.
+            parser_set_error(parser, "a column name or ','");
+            ast_destroy(node);
+            return NULL;
+        }
+        if (node->as.update_table.column_count >= MAX_TABLE_COLUMNS) {
+            parser_set_error(parser, "at most 8 columns");
+            ast_destroy(node);
+            return NULL;
+        }
+        node->as.update_table.columns[node->as.update_table.column_count] = parse_primary_expression(parser);
+        node->as.update_table.column_count++;
+
+        parser_advance(parser);
+        if (parser->current.type != TOKEN_EQUAL) {
+            parser_set_error(parser, "=");
+            ast_destroy(node);
+            return NULL;
+        }
+
+        parser_advance(parser);
+        if (parser->current.type != TOKEN_IDENTIFIER) {
+            // Unexpected token where a column name or comma was expected.
+            parser_set_error(parser, "a column name or ','");
+            ast_destroy(node);
+            return NULL;
+        }
+        if (node->as.update_table.values_count >= MAX_TABLE_COLUMNS) {
+            parser_set_error(parser, "at most 8 columns");
+            ast_destroy(node);
+            return NULL;
+        }
+
+        node->as.update_table.values[node->as.update_table.values_count] = parse_primary_expression(parser);
+        node->as.update_table.values_count++;
+
+    }
+
+    if (parser->current.type != TOKEN_WHERE) {
+        parser_set_error(parser, "WHERE keyword");
+        ast_destroy(node);
+        return NULL;
+    }
+
+    parser_advance(parser); // consume WHERE itself before parsing the condition
+    node->as.select.where = parse_expression(parser);
+    if (node->as.select.where == NULL) {
+        // parse_expression already set the error
+        ast_destroy(node);
+        return NULL;
+    }
+
+    return node;
+}
+
+/*
+DELETE FROM table_name
+WHERE condition;
+*/
+AstNode *parse_delete_statement(Parser *parser) {
+    if (parser->current.type != TOKEN_DELETE) {
+        parser_set_error(parser, "DELETE");
+        return NULL;
+    }
+    AstNode *node = malloc(sizeof(AstNode));
+    node->type = AST_DELETE;
+    if (parser->current.type !=TOKEN_IDENTIFIER) {
+        parser_set_error(parser, "a table name");
+        ast_destroy(node);
+        return NULL;
+    }
+
+    parser_advance(parser);
+    if (parser->current.type == TOKEN_WHERE) {
+        parser_advance(parser); // consume WHERE itself before parsing the condition
+        node->as.select.where = parse_expression(parser);
+        if (node->as.select.where == NULL) {
+            // parse_expression already set the error
+            ast_destroy(node);
+            return NULL;
+        }
+    }
+    return node;
+}
+
 AstNode *parse_insert_statement(Parser *parser) {
     if (parser->current.type != TOKEN_INSERT) {
         parser_set_error(parser, "INSERT");

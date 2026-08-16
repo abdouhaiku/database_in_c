@@ -111,6 +111,8 @@ uint8_t *catalog_node_column_count(void *page, uint32_t table_num);
 
 uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num);
 
+uint32_t catalog_node_find_column(void *page, uint32_t table_num, const char *column_name, size_t column_length);
+
 void open_database_and_initialize_catalog(char* filename, Pager *pager);
 
 bool validate_columns(Table *table, AstNode *tree, uint32_t table_num);

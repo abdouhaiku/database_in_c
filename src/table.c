@@ -15,6 +15,7 @@
 void serialize_row(const Row *row, uint8_t *destination);
 
 void deserialize_row(const uint8_t *source, Row *row, Table *table);
+static bool row_matches_where(const AstNode *where, const Row *row, void *catalog_page, size_t table_num);
 
 CommandResult insert_command(AstNode *tree, Table *table) {
     // Validate the values
@@ -97,6 +98,105 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         printf("Error: cannot insert\n");
         return insert_result;
     }
+    return COMMAND_SUCCESS;
+}
+
+
+CommandResult update_command(AstNode *tree, Table *table) {
+    typedef struct {
+        AstNode* column;
+        uint32_t idx;
+    } ColumnEntry;
+
+    void *catalog_page = pager_get_page(table->pager, 0);
+    uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.update_table.table, tree->as.update_table.table_length);
+    uint32_t row_size = catalog_node_row_size(catalog_page, table_num);
+    if (*catalog_node_column_count(pager_get_page(table->pager, 0), table_num) > tree->as.update_table.values_count) {
+        printf("The values count does not match the column count definitions! \n");
+        return -1;
+    }
+
+    ColumnEntry columns[tree->as.update_table.column_count];
+
+    for (uint32_t i = 0; i<tree->as.update_table.column_count; i++) {
+
+        // returns the index of the column from the table's page defintion
+        uint32_t column_index = catalog_node_find_column(catalog_page, table_num, tree->as.update_table.columns[i]->as.column.name,
+            tree->as.update_table.columns[i]->as.column.length);
+        if (column_index == UINT32_MAX) {
+            printf("Column %.*s is not found!\n", (int)tree->as.update_table.columns[i]->as.column.length,
+                tree->as.update_table.columns[i]->as.column.name);
+            return -1;
+        }
+
+        // column type if it matches the value's type
+        uint8_t stored_type = *(catalog_node_table(catalog_page, table_num) + TABLE_COLUMNS_OFFSET + (column_index * COLUMN_SIZE) +
+                                COLUMN_NAME_SIZE);
+
+        bool matches =
+        (stored_type == COLUMN_INTEGER && tree->as.update_table.values[i]->type == EXPR_LITERAL_INT) ||
+        (stored_type == COLUMN_TEXT && tree->as.update_table.values[i]->type == EXPR_LITERAL_STRING) ||
+        (stored_type == COLUMN_BOOLEAN && tree->as.update_table.values[i]->type == EXPR_LITERAL_BOOLEAN);
+
+        if (!matches) {
+            printf("Type mismatch, exit the program\n");
+            return -1;
+        }
+
+        // save this data since it will be used after
+        columns[i].idx = column_index;
+        columns[i].column = tree->as.update_table.columns[i];
+
+    }
+
+    void *curr = pager_get_page(table->pager, table->root_page_num);
+    if (curr == NULL) {
+        return -1;
+    }
+    uint32_t next_leaf_num = 0;
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        next_leaf_num = *internal_node_value(curr, 0);
+        curr = pager_get_page(table->pager, next_leaf_num);
+    }
+    // curr is the first leaf node page
+    while (curr != NULL) {
+        uint32_t num_cells = *leaf_node_num_cells(curr);
+        bool dirty = false;
+        for (uint32_t i = 0; i < num_cells; i++) {
+            Row row;
+            deserialize_row(leaf_node_value(curr, i, row_size), &row, table);
+            if (row_matches_where(tree->as.update_table.where, &row, catalog_page, table_num)) {
+                dirty = true;
+                for (size_t j = 0; j< tree->as.update_table.values_count; j++) {
+                    uint32_t row_idx = columns[i].idx;
+                    switch (row.values[row_idx].type) {
+                        case INTEGER_TYPE:
+                            row.values[row_idx].integer = tree->as.update_table.values[i]->as.literal_int;
+                            break;
+                        case TEXT_TYPE:
+                            memcpy(
+                                row.values[row_idx].string.text,
+                                tree->as.update_table.values[i]->as.literal_string.text,
+                                tree->as.update_table.values[i]->as.literal_string.length
+                            );
+                            row.values[row_idx].string.length = tree->as.update_table.values[i]->as.literal_string.length;
+                            break;
+                        case BOOLEAN_TYPE:
+                            row.values[row_idx].bool_value = tree->as.update_table.values[i]->as.literal_boolean.bool_value;
+                            break;
+                    }
+                    serialize_row(&row, leaf_node_value(curr, i, row_size));
+                }
+            }
+        }
+        if (dirty == true) {
+            pager_mark_dirty(table->pager, next_leaf_num);
+        }
+         next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) break;
+        curr = pager_get_page(table->pager, next_leaf_num);
+    }
+
     return COMMAND_SUCCESS;
 }
 

@@ -634,3 +634,20 @@ bool validate_columns(Table *table, AstNode *tree, uint32_t table_num) {
     }
     return true;
 }
+
+// return the column index that matches the column name
+uint32_t catalog_node_find_column(void *page, uint32_t table_num, const char *column_name, size_t column_length) {
+    uint8_t* table = catalog_node_table(page, table_num);
+    int column_count = *catalog_node_column_count(page, table_num);
+
+    for (uint32_t i=0; i<column_count; i++) {
+        char name[32];
+        memcpy(name, table + TABLE_HEADER_SIZE + (i * COLUMN_SIZE), 32);
+        if (column_length == strlen(name) && strncasecmp(name, column_name, column_length) == 0) {
+            return i;
+
+        }
+    }
+
+    return UINT32_MAX;
+}

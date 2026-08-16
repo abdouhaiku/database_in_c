@@ -21,11 +21,11 @@ typedef enum {
 } ColumnType;
 
 typedef enum {
-    TOKEN_NONE = 0,TOKEN_SELECT, TOKEN_FROM, TOKEN_WHERE, TOKEN_INSERT, TOKEN_INTO, TOKEN_VALUE,
-    TOKEN_IDENTIFIER, TOKEN_INTEGER, TOKEN_STRING,
+    TOKEN_NONE = 0,TOKEN_SELECT, TOKEN_FROM, TOKEN_WHERE, TOKEN_INSERT, TOKEN_INTO, TOKEN_VALUE, TOKEN_SET,
+    TOKEN_IDENTIFIER, TOKEN_INTEGER, TOKEN_STRING, TOKEN_UPDATE,
     TOKEN_COMMA, TOKEN_LPAREN, TOKEN_RPAREN, TOKEN_SEMICOLON, TOKEN_EQUAL, TOKEN_STAR,
     TOKEN_EOF, TOKEN_INVALID, TOKEN_CREATE, TOKEN_TABLE, TOKEN_TYPE_TEXT, TOKEN_TYPE_BOOLEAN, TOKEN_TYPE_INTEGER,
-    TOKEN_PRIMARY, TOKEN_KEY, TOKEN_TRUE, TOKEN_FALSE
+    TOKEN_PRIMARY, TOKEN_KEY, TOKEN_TRUE, TOKEN_FALSE, TOKEN_DELETE
 } TokenType;
 
 typedef struct {
@@ -56,8 +56,8 @@ void debug_ast(char *sql);
 #define MAX_TABLE_COLUMNS 8 // matches the catalog's per-table column-slot capacity
 
 typedef enum {
-    AST_INSERT, AST_SELECT, AST_CREATE_TABLE,
-    EXPR_LITERAL_INT, EXPR_LITERAL_STRING, EXPR_LITERAL_BOOLEAN,  EXPR_COLUMN, EXPR_EQUALS, EXPR_COLUMN_DEFINITION
+    AST_INSERT, AST_SELECT, AST_CREATE_TABLE, AST_UPDATE, AST_SET,
+    EXPR_LITERAL_INT, EXPR_LITERAL_STRING, EXPR_LITERAL_BOOLEAN,  EXPR_COLUMN, EXPR_EQUALS, EXPR_COLUMN_DEFINITION, AST_DELETE
 } AstNodeType;
 
 typedef struct AstNode AstNode;
@@ -81,6 +81,19 @@ struct AstNode {
             AstNode *columns_definitions[MAX_TABLE_COLUMNS];
             size_t column_count;
         } create_table;
+        struct {
+            const char* table; size_t table_length;
+            AstNode *columns[MAX_TABLE_COLUMNS];
+            size_t column_count;
+            AstNode *values[MAX_TABLE_COLUMNS];
+            size_t values_count;
+            AstNode *where;
+        } update_table;
+
+        struct {
+            const char* table; size_t table_length;
+            AstNode *where;
+        } delete_table;
         int64_t literal_int;
         struct { const char *text; size_t length; } literal_string;
         struct { const char *name; size_t length; } column;

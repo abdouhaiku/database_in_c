@@ -19,5 +19,6 @@ AstNode *parse_expression(Parser *parser);
 AstNode *parse_select_statement(Parser *parser);
 AstNode *parse_insert_statement(Parser *parser);
 AstNode *parse_create_statement(Parser *parser);
-
+AstNode *parse_update_statement(Parser *parser);
+AstNode *parse_delete_statement(Parser *parser);
 #endif //DATABASE_IN_C_PARSER_H

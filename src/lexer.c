@@ -241,6 +241,15 @@ void get_next_token(Tokenizer *tokenizer, Token *out_token) {
     else if (IS_KEYWORD("FALSE")) {
         out_token->type = TOKEN_FALSE;
     }
+    else if (IS_KEYWORD("SET")) {
+        out_token->type = TOKEN_SET;
+    }
+    else if (IS_KEYWORD("UPDATE")) {
+        out_token->type = TOKEN_UPDATE;
+    }
+    else if (IS_KEYWORD("DELETE")) {
+        out_token->type = TOKEN_DELETE;
+    }
     else if (is_digits(out_token->text, out_token->text_length)) {
         out_token->type = TOKEN_INTEGER;
         char temp[out_token->text_length + 1];

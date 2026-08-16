@@ -119,6 +119,12 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         case TOKEN_INSERT:
             tree = parse_insert_statement(&parser);
             break;
+        case TOKEN_UPDATE:
+            tree = parse_update_statement(&parser);
+            break;
+        case TOKEN_DELETE:
+            tree = parse_delete_statement(&parser);
+            break;
         default:
             printf("Statement is not supported\n");
             return -1;
@@ -171,7 +177,13 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
     CommandResult result = COMMAND_SUCCESS;
     if (tree->type == AST_INSERT) {
         result = insert_command(tree, &table);
-    } else if ((tree->as.select.where != NULL || tree->as.select.column_count > 0)
+    }else if (tree->type == AST_UPDATE) {
+        result = update_command(tree, &table);
+    }
+    else if (tree->type == AST_DELETE) {
+        result = delete_command(tree, &table);
+    }
+    else if ((tree->as.select.where != NULL || tree->as.select.column_count > 0)
                && !validate_columns(&table, tree, table_num)) {
         printf("Column(s) entered do not exist!\n");
     } else {
