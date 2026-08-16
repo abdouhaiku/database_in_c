@@ -170,20 +170,28 @@ CommandResult process_command(InputBuffer *input_buffer, Pager *pager) {
         .table_length = tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
     };
 
-    // Build Plan
+    if (tree->type == AST_INSERT) {
+        CommandResult result = insert_command(tree, &table);
+        ast_destroy(tree);
+        return result;
+    }
+    if (tree->type == AST_UPDATE) {
+        CommandResult result = update_command(tree, &table);
+        ast_destroy(tree);
+        return result;
+    }
+    if (tree->type == AST_DELETE) {
+        CommandResult result = delete_command(tree, &table);
+        ast_destroy(tree);
+        return result;
+    }
+
+    // Build Plan - only SELECT-shaped trees reach this point now
     PlanNode *plan_node = malloc(sizeof(PlanNode));
     build_plan(plan_node, tree, &table);
 
     CommandResult result = COMMAND_SUCCESS;
-    if (tree->type == AST_INSERT) {
-        result = insert_command(tree, &table);
-    }else if (tree->type == AST_UPDATE) {
-        result = update_command(tree, &table);
-    }
-    else if (tree->type == AST_DELETE) {
-        result = delete_command(tree, &table);
-    }
-    else if ((tree->as.select.where != NULL || tree->as.select.column_count > 0)
+    if ((tree->as.select.where != NULL || tree->as.select.column_count > 0)
                && !validate_columns(&table, tree, table_num)) {
         printf("Column(s) entered do not exist!\n");
     } else {

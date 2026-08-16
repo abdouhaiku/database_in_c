@@ -111,7 +111,7 @@ CommandResult update_command(AstNode *tree, Table *table) {
     void *catalog_page = pager_get_page(table->pager, 0);
     uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.update_table.table, tree->as.update_table.table_length);
     uint32_t row_size = catalog_node_row_size(catalog_page, table_num);
-    if (*catalog_node_column_count(pager_get_page(table->pager, 0), table_num) > tree->as.update_table.values_count) {
+    if (tree->as.update_table.column_count != tree->as.update_table.values_count) {
         printf("The values count does not match the column count definitions! \n");
         return -1;
     }
@@ -149,14 +149,14 @@ CommandResult update_command(AstNode *tree, Table *table) {
 
     }
 
-    void *curr = pager_get_page(table->pager, table->root_page_num);
+    uint32_t current_leaf_page_num = table->root_page_num;
+    void *curr = pager_get_page(table->pager, current_leaf_page_num);
     if (curr == NULL) {
         return -1;
     }
-    uint32_t next_leaf_num = 0;
     while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
-        next_leaf_num = *internal_node_value(curr, 0);
-        curr = pager_get_page(table->pager, next_leaf_num);
+        current_leaf_page_num = *internal_node_value(curr, 0);
+        curr = pager_get_page(table->pager, current_leaf_page_num);
     }
     // curr is the first leaf node page
     while (curr != NULL) {
@@ -168,33 +168,38 @@ CommandResult update_command(AstNode *tree, Table *table) {
             if (row_matches_where(tree->as.update_table.where, &row, catalog_page, table_num)) {
                 dirty = true;
                 for (size_t j = 0; j< tree->as.update_table.values_count; j++) {
-                    uint32_t row_idx = columns[i].idx;
+                    uint32_t row_idx = columns[j].idx;
                     switch (row.values[row_idx].type) {
                         case INTEGER_TYPE:
-                            row.values[row_idx].integer = tree->as.update_table.values[i]->as.literal_int;
+                            row.values[row_idx].integer = tree->as.update_table.values[j]->as.literal_int;
                             break;
                         case TEXT_TYPE:
+                            if (tree->as.update_table.values[j]->as.literal_string.length > VALUE_TEXT_MAX_LEN) {
+                                printf("Text value too long\n");
+                                return -1;
+                            }
                             memcpy(
                                 row.values[row_idx].string.text,
-                                tree->as.update_table.values[i]->as.literal_string.text,
-                                tree->as.update_table.values[i]->as.literal_string.length
+                                tree->as.update_table.values[j]->as.literal_string.text,
+                                tree->as.update_table.values[j]->as.literal_string.length
                             );
-                            row.values[row_idx].string.length = tree->as.update_table.values[i]->as.literal_string.length;
+                            row.values[row_idx].string.length = tree->as.update_table.values[j]->as.literal_string.length;
                             break;
                         case BOOLEAN_TYPE:
-                            row.values[row_idx].bool_value = tree->as.update_table.values[i]->as.literal_boolean.bool_value;
+                            row.values[row_idx].bool_value = tree->as.update_table.values[j]->as.literal_boolean.bool_value;
                             break;
                     }
-                    serialize_row(&row, leaf_node_value(curr, i, row_size));
                 }
+                serialize_row(&row, leaf_node_value(curr, i, row_size));
             }
         }
         if (dirty == true) {
-            pager_mark_dirty(table->pager, next_leaf_num);
+            pager_mark_dirty(table->pager, current_leaf_page_num);
         }
-         next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
         if (next_leaf_num == 0) break;
-        curr = pager_get_page(table->pager, next_leaf_num);
+        current_leaf_page_num = next_leaf_num;
+        curr = pager_get_page(table->pager, current_leaf_page_num);
     }
 
     return COMMAND_SUCCESS;

@@ -191,8 +191,8 @@ AstNode *parse_update_statement(Parser *parser) {
         ast_destroy(node);
         return NULL;
     }
-    node->as.create_table.table = parser->current.text;
-    node->as.create_table.table_length = parser->current.text_length;
+    node->as.update_table.table = parser->current.text; // was as.create_table.table (wrong union member)
+    node->as.update_table.table_length = parser->current.text_length;
     parser_advance(parser);
 
     if (parser->current.type != TOKEN_SET) {
@@ -204,6 +204,10 @@ AstNode *parse_update_statement(Parser *parser) {
     parser_advance(parser);
 
     while (parser->current.type != TOKEN_EOF && parser->current.type != TOKEN_WHERE) {
+        if (parser->current.type == TOKEN_COMMA) {
+            parser_advance(parser);
+            continue;
+        }
         if (parser->current.type != TOKEN_IDENTIFIER) {
             // Unexpected token where a column name or comma was expected.
             parser_set_error(parser, "a column name or ','");
@@ -217,8 +221,6 @@ AstNode *parse_update_statement(Parser *parser) {
         }
         node->as.update_table.columns[node->as.update_table.column_count] = parse_primary_expression(parser);
         node->as.update_table.column_count++;
-
-        parser_advance(parser);
         if (parser->current.type != TOKEN_EQUAL) {
             parser_set_error(parser, "=");
             ast_destroy(node);
@@ -226,19 +228,18 @@ AstNode *parse_update_statement(Parser *parser) {
         }
 
         parser_advance(parser);
-        if (parser->current.type != TOKEN_IDENTIFIER) {
-            // Unexpected token where a column name or comma was expected.
-            parser_set_error(parser, "a column name or ','");
-            ast_destroy(node);
-            return NULL;
-        }
         if (node->as.update_table.values_count >= MAX_TABLE_COLUMNS) {
             parser_set_error(parser, "at most 8 columns");
             ast_destroy(node);
             return NULL;
         }
 
-        node->as.update_table.values[node->as.update_table.values_count] = parse_primary_expression(parser);
+        AstNode *value = parse_primary_expression(parser);
+        if (value == NULL) {
+            ast_destroy(node);
+            return NULL;
+        }
+        node->as.update_table.values[node->as.update_table.values_count] = value;
         node->as.update_table.values_count++;
 
     }
@@ -250,8 +251,8 @@ AstNode *parse_update_statement(Parser *parser) {
     }
 
     parser_advance(parser); // consume WHERE itself before parsing the condition
-    node->as.select.where = parse_expression(parser);
-    if (node->as.select.where == NULL) {
+    node->as.update_table.where = parse_expression(parser);
+    if (node->as.update_table.where == NULL) {
         // parse_expression already set the error
         ast_destroy(node);
         return NULL;
@@ -271,17 +272,29 @@ AstNode *parse_delete_statement(Parser *parser) {
     }
     AstNode *node = malloc(sizeof(AstNode));
     node->type = AST_DELETE;
-    if (parser->current.type !=TOKEN_IDENTIFIER) {
+    node->as.delete_table.where = NULL;
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_FROM) {
+        parser_set_error(parser, "FROM");
+        ast_destroy(node);
+        return NULL;
+    }
+    parser_advance(parser);
+
+    if (parser->current.type != TOKEN_IDENTIFIER) {
         parser_set_error(parser, "a table name");
         ast_destroy(node);
         return NULL;
     }
-
+    node->as.delete_table.table = parser->current.text;
+    node->as.delete_table.table_length = parser->current.text_length;
     parser_advance(parser);
+
     if (parser->current.type == TOKEN_WHERE) {
         parser_advance(parser); // consume WHERE itself before parsing the condition
-        node->as.select.where = parse_expression(parser);
-        if (node->as.select.where == NULL) {
+        node->as.delete_table.where = parse_expression(parser);
+        if (node->as.delete_table.where == NULL) {
             // parse_expression already set the error
             ast_destroy(node);
             return NULL;

@@ -34,6 +34,20 @@ void ast_destroy(AstNode *node) {
                 ast_destroy(node->as.create_table.columns_definitions[i]);
             }
             break;
+        case AST_UPDATE:
+            for (size_t i = 0; i < node->as.update_table.column_count; i++) {
+                ast_destroy(node->as.update_table.columns[i]);
+            }
+            for (size_t i = 0; i < node->as.update_table.values_count; i++) {
+                ast_destroy(node->as.update_table.values[i]);
+            }
+            ast_destroy(node->as.update_table.where);
+            break;
+        case AST_DELETE:
+            ast_destroy(node->as.delete_table.where);
+            break;
+        case AST_SET:
+            break;
         case EXPR_LITERAL_INT:
         case EXPR_LITERAL_STRING:
         case EXPR_LITERAL_BOOLEAN:
