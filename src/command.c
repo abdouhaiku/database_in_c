@@ -52,6 +52,52 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
         print_table_schema(pager,table_name);
         return DEBUG_AST_SUCCESS;
     }
+    if (strncasecmp(input_buffer->buffer, ".plan", 5) == 0) {
+        char *sql_query = input_buffer->buffer + 5;
+        Parser parser;
+        parser_init(&parser, sql_query);
+        AstNode *tree;
+        switch (parser.current.type) {
+            case TOKEN_SELECT:
+                tree = parse_select_statement(&parser);
+                break;
+            case TOKEN_INSERT:
+                tree = parse_insert_statement(&parser);
+                break;
+            default:
+                printf(".plan only supports SELECT/INSERT statements\n");
+                return DEBUG_AST_SUCCESS;
+        }
+        if (tree == NULL) {
+            printf("%s\n", parser.error);
+            return DEBUG_AST_SUCCESS;
+        }
+
+        void *catalog_page = pager_get_page(pager, 0);
+        uint32_t table_num = catalog_node_find_table(catalog_page,
+            tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
+            tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length);
+        if (table_num == UINT32_MAX) {
+            printf("Table is not found\n");
+            ast_destroy(tree);
+            return DEBUG_AST_SUCCESS;
+        }
+
+        Table table = {
+            .pager = pager,
+            .root_page_num = *catalog_node_root_page(catalog_page, table_num),
+            .table_name = tree->type == AST_SELECT ? tree->as.select.table : tree->as.insert.table,
+            .table_length = tree->type == AST_SELECT ? tree->as.select.table_length : tree->as.insert.table_length
+        };
+
+        PlanNode *plan_node = malloc(sizeof(PlanNode));
+        build_plan(plan_node, tree, &table);
+        plan_print(plan_node);
+
+        plan_destroy(plan_node);
+        ast_destroy(tree);
+        return DEBUG_AST_SUCCESS;
+    }
 
 
 

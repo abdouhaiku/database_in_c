@@ -181,6 +181,8 @@ void ast_destroy(AstNode *node);
 
 void ast_print(AstNode *node);
 
+void plan_print(PlanNode *node);
+
 void print_table_schema(Pager *pager, char* table_name);
 
 void plan_destroy(PlanNode *node);

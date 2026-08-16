@@ -177,6 +177,80 @@ void ast_print(AstNode *node) {
     ast_print_node(node, 0);
 }
 
+static const char *plan_node_type_name(PlanNodeType type) {
+    switch (type) {
+        case PLAN_TABLE_SCAN: return "PLAN_TABLE_SCAN";
+        case PLAN_PK_LOOKUP: return "PLAN_PK_LOOKUP";
+        case PLAN_FILTER: return "PLAN_FILTER";
+        case PLAN_PROJECTION: return "PLAN_PROJECTION";
+        case PLAN_INSERT: return "PLAN_INSERT";
+    }
+    return "PLAN_UNKNOWN";
+}
+
+static void plan_print_node(PlanNode *node, int depth) {
+    if (node == NULL) {
+        ast_print_indent(depth);
+        printf("NULL\n");
+        return;
+    }
+
+    ast_print_indent(depth);
+    printf("PlanNode { type: %s }\n", plan_node_type_name(node->type));
+
+    switch (node->type) {
+        case PLAN_TABLE_SCAN:
+            ast_print_indent(depth + 1);
+            printf("root_page_num: %u\n", node->as.table_scan.root_page_num);
+            ast_print_indent(depth + 1);
+            printf("row_size: %u\n", node->as.table_scan.row_size);
+            break;
+        case PLAN_PK_LOOKUP:
+            ast_print_indent(depth + 1);
+            printf("root_page_num: %u\n", node->as.pk_lookup.root_page_num);
+            ast_print_indent(depth + 1);
+            printf("key: %lld\n", (long long) node->as.pk_lookup.key);
+            ast_print_indent(depth + 1);
+            printf("row_size: %u\n", node->as.pk_lookup.row_size);
+            break;
+        case PLAN_FILTER:
+            ast_print_indent(depth + 1);
+            printf("condition:\n");
+            ast_print_node(node->as.filter.condition, depth + 2);
+            ast_print_indent(depth + 1);
+            printf("child:\n");
+            plan_print_node(node->as.filter.child, depth + 2);
+            break;
+        case PLAN_PROJECTION:
+            ast_print_indent(depth + 1);
+            printf("columns: [\n");
+            for (size_t i = 0; i < node->as.projection.column_count; i++) {
+                ast_print_node(node->as.projection.columns[i], depth + 2);
+            }
+            ast_print_indent(depth + 1);
+            printf("]\n");
+            ast_print_indent(depth + 1);
+            printf("child:\n");
+            plan_print_node(node->as.projection.child, depth + 2);
+            break;
+        case PLAN_INSERT:
+            ast_print_indent(depth + 1);
+            printf("root_page_num: %u\n", node->as.insert.root_page_num);
+            ast_print_indent(depth + 1);
+            printf("values: [\n");
+            for (size_t i = 0; i < node->as.insert.value_count; i++) {
+                ast_print_node(node->as.insert.values[i], depth + 2);
+            }
+            ast_print_indent(depth + 1);
+            printf("]\n");
+            break;
+    }
+}
+
+void plan_print(PlanNode *node) {
+    plan_print_node(node, 0);
+}
+
 
 void print_table_schema(Pager *pager, char *table_name) {
     Token out_token;
