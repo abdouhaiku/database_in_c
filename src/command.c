@@ -21,7 +21,8 @@ CommandResult do_meta_command(InputBuffer *input_buffer, Pager *pager) {
             printf("Error reading leaf node\n");
             return DEBUG_BTREE_SUCCESS;
         }
-        debug_leaf_node(page, pager);
+        uint32_t row_size = *catalog_node_num_tables(page) > 0 ? catalog_node_row_size(page, 0) : 0;
+        debug_leaf_node(page, pager, row_size);
         return DEBUG_BTREE_SUCCESS;
     }
     if (strncasecmp(input_buffer->buffer, ".tokens", 7) == 0) {

@@ -105,11 +105,13 @@ typedef struct PlanNode {
     union {
         struct {
             uint32_t root_page_num;
+            uint32_t row_size;        // this table's on-disk row size, computed once from its schema
         } table_scan;
 
         struct {
             uint32_t root_page_num;
             int64_t key;
+            uint32_t row_size;
         } pk_lookup;
 
         struct {
@@ -145,12 +147,14 @@ typedef struct Cursor {
         struct {
             uint32_t current_page_num;
             uint32_t current_cell_num;
+            uint32_t row_size;
             bool done;
         } table_scan;
 
         struct {
             uint32_t root_page_num;
             int64_t key;
+            uint32_t row_size;
             bool done;
         } pk_lookup;
 

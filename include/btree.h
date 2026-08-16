@@ -17,11 +17,8 @@
 
 #define KEY_SIZE                8                                   // sizeof(int64_t)
 #define KEY_OFFSET               0
-#define VALUE_SIZE                ROW_SIZE
 #define VALUE_OFFSET             (KEY_OFFSET + KEY_SIZE)             // 8
-#define LEAF_NODE_CELL_SIZE      (KEY_SIZE + VALUE_SIZE)             // 296
 #define LEAF_NODE_SPACE_FOR_CELLS (PAGE_SIZE - LEAF_NODE_HEADER_SIZE) // 4082
-#define LEAF_NODE_MAX_CELLS      (LEAF_NODE_SPACE_FOR_CELLS / LEAF_NODE_CELL_SIZE) // 13
 
 // Internal keys offsets + size
 #define INTERNAL_NODE_NUM_KEYS_OFFSET 6  // uint32_t, 4 bytes long same as NUM_CELLS_OFFSET
@@ -57,18 +54,26 @@ void leaf_node_init(void *page);
 
 uint32_t *leaf_node_num_cells(void *page);
 
-uint8_t *leaf_node_cell(void *page, uint32_t cell_num);
+uint8_t *leaf_node_cell(void *page, uint32_t cell_num, uint32_t row_size);
 
-int64_t *leaf_node_key(void *page, uint32_t cell_num);
+int64_t *leaf_node_key(void *page, uint32_t cell_num, uint32_t row_size);
 
-uint8_t *leaf_node_value(void *page, uint32_t cell_num);
+uint8_t *leaf_node_value(void *page, uint32_t cell_num, uint32_t row_size);
 
-uint32_t leaf_node_find(void *page, int64_t key);
+uint32_t leaf_node_find(void *page, int64_t key, uint32_t row_size);
 
 // return the index where the node exist or the node where the key should be inserted
-CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key, const Row *row);
+CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key, const Row *row, uint32_t row_size);
 
-void debug_leaf_node(void *page, Pager *pager);
+void debug_leaf_node(void *page, Pager *pager, uint32_t row_size);
+
+// A table's on-disk row size, summed from its actual columns (8 bytes/INTEGER, 1/BOOLEAN,
+// VALUE_TEXT_MAX_LEN/TEXT): replaces the old one-size-fits-every-table ROW_SIZE constant.
+uint32_t catalog_node_row_size(void *page, uint32_t table_num);
+
+uint32_t leaf_node_cell_size(uint32_t row_size);
+
+uint32_t leaf_node_max_cells(uint32_t row_size);
 
 // internal node accessors
 void internal_node_init(void *page, int is_root);
@@ -85,7 +90,7 @@ uint32_t internal_node_find(void *page, int64_t key);
 CommandResult internal_node_insert(Pager *pager, void *page, uint32_t page_num, uint32_t cell_num, int64_t key,
                                    uint32_t left_child_page_num, uint32_t right_child_page_num);
 
-CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row);
+CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_num, int64_t new_key, const Row *new_row, uint32_t row_size);
 
 CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_page_num, int64_t new_key,
                                   uint32_t left_child_page_num, uint32_t right_child_page_num);

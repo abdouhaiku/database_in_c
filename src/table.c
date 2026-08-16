@@ -41,6 +41,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         }
     }
 
+    uint32_t row_size = catalog_node_row_size(catalog_page, table_num);
+
     Row row;
     memset(&row, 0, sizeof(row)); // zero every value slot so unused text bytes are real padding
     row.value_count = tree->as.insert.values_count;
@@ -58,8 +60,8 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         return -1;
     }
 
-    uint32_t cell_num = leaf_node_find(leaf_page, primary_key);
-    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num) == primary_key) {
+    uint32_t cell_num = leaf_node_find(leaf_page, primary_key, row_size);
+    if (cell_num < *leaf_node_num_cells(leaf_page) && *leaf_node_key(leaf_page, cell_num, row_size) == primary_key) {
         printf("Id %ld is duplicated\n", primary_key);
         return ID_DUPLICATE_ERROR;
     }
@@ -87,9 +89,9 @@ CommandResult insert_command(AstNode *tree, Table *table) {
         }
     }
 
-    CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, primary_key, &row);
+    CommandResult insert_result = leaf_node_insert(table, leaf_page, leaf_page_num, cell_num, primary_key, &row, row_size);
     if (insert_result == LEAF_FULL_ERROR) {
-        insert_result = split_leaf_node(table, leaf_page, leaf_page_num, primary_key, &row);
+        insert_result = split_leaf_node(table, leaf_page, leaf_page_num, primary_key, &row, row_size);
     }
     if (insert_result != COMMAND_SUCCESS) {
         printf("Error: cannot insert\n");
@@ -268,7 +270,7 @@ bool table_scan_next(Cursor *cursor, Table *table, Row *out_row) {
         }
         cell_num = 0;
     }
-    deserialize_row(leaf_node_value(curr, cell_num), out_row, table);
+    deserialize_row(leaf_node_value(curr, cell_num, cursor->as.table_scan.row_size), out_row, table);
     cursor->as.table_scan.current_page_num = page_num;
     cursor->as.table_scan.current_cell_num = cell_num + 1;
     return true;
@@ -279,18 +281,19 @@ bool pk_lookup_next(Cursor *cursor, Table *table, Row *out_row) {
         return false;
     }
     int64_t key = cursor->as.pk_lookup.key;
+    uint32_t row_size = cursor->as.pk_lookup.row_size;
     void *root_page = pager_get_page(table->pager, cursor->as.pk_lookup.root_page_num);
     if (root_page == NULL) {
         return false;
     }
     uint32_t out_page_num;
     void *leaf_page = leaf_node_for_key(table->pager, root_page, key, &out_page_num, cursor->as.pk_lookup.root_page_num);
-    uint32_t cell_num = leaf_node_find(leaf_page, key);
-    if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num) != key) {
+    uint32_t cell_num = leaf_node_find(leaf_page, key, row_size);
+    if (cell_num >= *leaf_node_num_cells(leaf_page) || *leaf_node_key(leaf_page, cell_num, row_size) != key) {
         cursor->as.pk_lookup.done = true;
         return false;
     }
-    deserialize_row(leaf_node_value(leaf_page, cell_num), out_row, table);
+    deserialize_row(leaf_node_value(leaf_page, cell_num, row_size), out_row, table);
     cursor->as.pk_lookup.done = true;
     return true;
 }

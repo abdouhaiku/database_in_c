@@ -34,9 +34,6 @@ typedef struct {
     size_t value_count;
 } Row;
 
-#define ROW_SIZE sizeof(Row)
-#define ROWS_PER_PAGE (PAGE_SIZE / ROW_SIZE)
-
 typedef struct Table {
     Pager *pager;
     uint32_t root_page_num;

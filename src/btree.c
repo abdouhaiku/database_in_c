@@ -1,6 +1,7 @@
 #include "btree.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/errno.h>
 
@@ -44,27 +45,35 @@ uint32_t *leaf_node_num_cells(void *page) {
     return (uint32_t *) ((uint8_t *) page + NUM_CELLS_OFFSET);
 }
 
-uint8_t *leaf_node_cell(void *page, uint32_t cell_num) {
-    return (uint8_t *) page + LEAF_NODE_HEADER_SIZE + (cell_num * LEAF_NODE_CELL_SIZE);
+uint32_t leaf_node_cell_size(uint32_t row_size) {
+    return KEY_SIZE + row_size;
 }
 
-int64_t *leaf_node_key(void *page, uint32_t cell_num) {
-    return (int64_t *) leaf_node_cell(page, cell_num);
+uint32_t leaf_node_max_cells(uint32_t row_size) {
+    return LEAF_NODE_SPACE_FOR_CELLS / leaf_node_cell_size(row_size);
 }
 
-uint8_t *leaf_node_value(void *page, uint32_t cell_num) {
-    return leaf_node_cell(page, cell_num) + VALUE_OFFSET;
+uint8_t *leaf_node_cell(void *page, uint32_t cell_num, uint32_t row_size) {
+    return (uint8_t *) page + LEAF_NODE_HEADER_SIZE + (cell_num * leaf_node_cell_size(row_size));
+}
+
+int64_t *leaf_node_key(void *page, uint32_t cell_num, uint32_t row_size) {
+    return (int64_t *) leaf_node_cell(page, cell_num, row_size);
+}
+
+uint8_t *leaf_node_value(void *page, uint32_t cell_num, uint32_t row_size) {
+    return leaf_node_cell(page, cell_num, row_size) + VALUE_OFFSET;
 }
 
 
-uint32_t leaf_node_find(void *page, int64_t key) {
+uint32_t leaf_node_find(void *page, int64_t key, uint32_t row_size) {
     uint32_t low = 0;
     uint32_t high = *leaf_node_num_cells(page);
 
     while (low < high) {
         uint32_t mid = low + (high - low) / 2;
 
-        int64_t node_key = *leaf_node_key(page, mid);
+        int64_t node_key = *leaf_node_key(page, mid, row_size);
         if (node_key == key) {
             return mid;
         }
@@ -80,20 +89,20 @@ uint32_t leaf_node_find(void *page, int64_t key) {
 }
 
 CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num, uint32_t cell_num, int64_t key,
-                               const Row *row) {
-    if (*leaf_node_num_cells(page) >= LEAF_NODE_MAX_CELLS) {
+                               const Row *row, uint32_t row_size) {
+    if (*leaf_node_num_cells(page) >= leaf_node_max_cells(row_size)) {
         return LEAF_FULL_ERROR;
     }
 
     uint32_t num_cells = *leaf_node_num_cells(page);
     // Move data by cell_num + 1 to complete the shifting operation
-    memmove(leaf_node_cell(page, cell_num + 1),
-            leaf_node_cell(page, cell_num),
-            (num_cells - cell_num) * LEAF_NODE_CELL_SIZE);
-    int64_t *keyptr = leaf_node_key(page, cell_num);
+    memmove(leaf_node_cell(page, cell_num + 1, row_size),
+            leaf_node_cell(page, cell_num, row_size),
+            (num_cells - cell_num) * leaf_node_cell_size(row_size));
+    int64_t *keyptr = leaf_node_key(page, cell_num, row_size);
     *keyptr = key;
 
-    serialize_row(row, leaf_node_value(page, cell_num));
+    serialize_row(row, leaf_node_value(page, cell_num, row_size));
     *leaf_node_num_cells(page) = num_cells + 1;
     //mark the page as dirty
     pager_mark_dirty(table->pager, leaf_page_num);
@@ -102,7 +111,7 @@ CommandResult leaf_node_insert(Table *table, void *page, uint32_t leaf_page_num,
 }
 
 
-void debug_leaf_node(void *page, Pager *pager) {
+void debug_leaf_node(void *page, Pager *pager, uint32_t row_size) {
     // Search for the first leaf, and keep visiting the next leaf
     void *curr = page;
     while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
@@ -114,7 +123,7 @@ void debug_leaf_node(void *page, Pager *pager) {
         uint32_t num_cells = *leaf_node_num_cells(curr);
         printf("Leaf %d ( size %u)\n", i, num_cells);
         for (uint32_t i = 0; i < num_cells; i++) {
-            printf("- %lld\n", *leaf_node_key(curr, i));
+            printf("- %lld\n", *leaf_node_key(curr, i, row_size));
         }
         i++;
         uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
@@ -371,22 +380,25 @@ CommandResult split_internal_node(Pager *pager, void *old_page, uint32_t old_pag
 
 
 CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_num, int64_t new_key,
-                              const Row *new_row) {
+                              const Row *new_row, uint32_t row_size) {
     typedef struct {
         Row row;
         int64_t key;
     } NodeEntry;
 
+    uint32_t max_cells = leaf_node_max_cells(row_size);
     uint32_t left_child_page_num = 0;
     uint32_t right_child_page_num = 0;
     //copy all the keys of the old page plus the new keys into a temp buffer
-    NodeEntry temp[LEAF_NODE_MAX_CELLS + 1];
-    for (uint32_t i = 0; i < LEAF_NODE_MAX_CELLS; i++) {
-        temp[i].key = *leaf_node_key(old_page, i);
-        deserialize_row(leaf_node_value(old_page, i), &temp[i].row, table);
+    //heap-allocated since max_cells is now a per-table runtime value, not a compile-time constant
+    //a stack array here could get large for tables with small rows (more cells per leaf)
+    NodeEntry *temp = malloc((max_cells + 1) * sizeof(NodeEntry));
+    for (uint32_t i = 0; i < max_cells; i++) {
+        temp[i].key = *leaf_node_key(old_page, i, row_size);
+        deserialize_row(leaf_node_value(old_page, i, row_size), &temp[i].row, table);
     }
     //insert the new key into the correct position
-    uint32_t i = LEAF_NODE_MAX_CELLS;
+    uint32_t i = max_cells;
     while (i > 0 && temp[i - 1].key > new_key) {
         temp[i] = temp[i - 1];
         i--;
@@ -395,17 +407,18 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
     memcpy(&temp[i].row, new_row, sizeof(Row));
 
     // All the keys are inserted we can get the promoted key
-    uint32_t mid = (LEAF_NODE_MAX_CELLS + 1) / 2;
+    uint32_t mid = (max_cells + 1) / 2;
     NodeEntry promoted = temp[mid];
     // create a new leaf node
     right_child_page_num = table->pager->num_pages;
     void *right_child_page = pager_get_page(table->pager, right_child_page_num);
     if (right_child_page == NULL) {
+        free(temp);
         return -1;
     }
     leaf_node_init(right_child_page);
     *((uint8_t *) right_child_page + IS_ROOT_OFFSET) = 0;
-    uint32_t right_num_cells = LEAF_NODE_MAX_CELLS - mid + 1;
+    uint32_t right_num_cells = max_cells - mid + 1;
     int is_root_split = *((uint8_t *) old_page + IS_ROOT_OFFSET) == 1;
     *(uint32_t *) ((uint8_t *) right_child_page + PARENT_POINTER_OFFSET) = is_root_split
                                                                                ? old_page_num
@@ -415,8 +428,8 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
 
     //copy all the right cells to the new leaf
     for (uint32_t index = 0; index < right_num_cells; index++) {
-        *leaf_node_key(right_child_page, index) = temp[mid + index].key;
-        serialize_row(&temp[mid + index].row, leaf_node_value(right_child_page, index));
+        *leaf_node_key(right_child_page, index, row_size) = temp[mid + index].key;
+        serialize_row(&temp[mid + index].row, leaf_node_value(right_child_page, index, row_size));
         *leaf_node_num_cells(right_child_page) = *leaf_node_num_cells(right_child_page) + 1;
     }
     pager_mark_dirty(table->pager, right_child_page_num);
@@ -427,15 +440,17 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
         left_child_page_num = table->pager->num_pages;
         void *left_child = pager_get_page(table->pager, left_child_page_num);
         if (left_child == NULL) {
+            free(temp);
             return -1;
         }
         leaf_node_init(left_child);
         *((uint8_t *) left_child + IS_ROOT_OFFSET) = 0;
         //copy all of content of the old page to the left child page
         for (uint32_t index = 0; index < mid; index++) {
-            *leaf_node_key(left_child, index) = temp[index].key;
-            serialize_row(&temp[index].row, leaf_node_value(left_child, index));
+            *leaf_node_key(left_child, index, row_size) = temp[index].key;
+            serialize_row(&temp[index].row, leaf_node_value(left_child, index, row_size));
         }
+        free(temp);
         *leaf_node_num_cells(left_child) = mid;
         *(uint32_t *) ((uint8_t *) left_child + NEXT_LEAF_OFFSET) = right_child_page_num;
         //Update the parent of the left child
@@ -462,9 +477,10 @@ CommandResult split_leaf_node(Table *table, void *old_page, uint32_t old_page_nu
     memset((uint8_t*)old_page + LEAF_NODE_HEADER_SIZE, 0, LEAF_NODE_SPACE_FOR_CELLS);
     *leaf_node_num_cells(old_page) = mid;
     for (uint32_t index = 0; index < mid; index++) {
-        *leaf_node_key(old_page, index) = temp[index].key;
-        serialize_row(&temp[index].row, leaf_node_value(old_page, index));
+        *leaf_node_key(old_page, index, row_size) = temp[index].key;
+        serialize_row(&temp[index].row, leaf_node_value(old_page, index, row_size));
     }
+    free(temp);
     pager_mark_dirty(table->pager, left_child_page_num);
     uint32_t parent_page_num = *(uint32_t *) ((uint8_t *) old_page + PARENT_POINTER_OFFSET);
 
@@ -514,6 +530,29 @@ uint8_t *catalog_node_column_count(void *page, uint32_t table_num) {
 
 uint8_t *catalog_node_primary_key_column(void *page, uint32_t table_num) {
     return catalog_node_table(page, table_num) + PRIMARY_KEY_COLUMN_OFFSET;
+}
+
+// A table's on-disk row size: the sum of each of its own columns' actual serialized width,
+// mirroring the exact per-type widths serialize_row/deserialize_row already use.
+uint32_t catalog_node_row_size(void *page, uint32_t table_num) {
+    uint8_t column_count = *catalog_node_column_count(page, table_num);
+    uint32_t size = 0;
+    for (uint8_t i = 0; i < column_count; i++) {
+        uint8_t stored_type = *(catalog_node_table(page, table_num) + TABLE_COLUMNS_OFFSET + (i * COLUMN_SIZE) +
+                                COLUMN_NAME_SIZE);
+        switch (stored_type) {
+            case COLUMN_INTEGER:
+                size += sizeof(int64_t);
+                break;
+            case COLUMN_TEXT:
+                size += VALUE_TEXT_MAX_LEN;
+                break;
+            case COLUMN_BOOLEAN:
+                size += 1;
+                break;
+        }
+    }
+    return size;
 }
 
 bool is_primary_key(void *page, uint32_t table_num, const char* column_name, size_t column_length) {
