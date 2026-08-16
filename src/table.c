@@ -205,6 +205,55 @@ CommandResult update_command(AstNode *tree, Table *table) {
     return COMMAND_SUCCESS;
 }
 
+
+CommandResult delete_command(AstNode *tree, Table *table) {
+    void *catalog_page = pager_get_page(table->pager, 0);
+    uint32_t table_num = catalog_node_find_table(catalog_page, tree->as.delete_table.table, tree->as.delete_table.table_length);
+    uint32_t row_size = catalog_node_row_size(catalog_page, table_num);
+
+    uint32_t current_leaf_page_num = table->root_page_num;
+    void *curr = pager_get_page(table->pager, current_leaf_page_num);
+    if (curr == NULL) {
+        return -1;
+    }
+    while (*((uint8_t *) curr + NODE_TYPE_OFFSET) == NODE_INTERNAL) {
+        current_leaf_page_num = *internal_node_value(curr, 0);
+        curr = pager_get_page(table->pager, current_leaf_page_num);
+    }
+    // curr is the first leaf node page
+    while (curr != NULL) {
+        uint32_t num_cells = *leaf_node_num_cells(curr);
+        bool dirty = false;
+        uint32_t i = 0;
+        while (i < num_cells) {
+            Row row;
+            deserialize_row(leaf_node_value(curr, i, row_size), &row, table);
+            if (row_matches_where(tree->as.delete_table.where, &row, catalog_page, table_num)) {
+                // shift every cell after i left by one slot,  this delete leaves. It is similar
+                // than leaf_node_insert's shift-right in reverse.
+                memmove(leaf_node_cell(curr, i, row_size),
+                        leaf_node_cell(curr, i + 1, row_size),
+                        (num_cells - i - 1) * leaf_node_cell_size(row_size));
+                num_cells--;
+                *leaf_node_num_cells(curr) = num_cells;
+                dirty = true;
+                // don't advance i ! the row that just shifted into this slot still needs checking
+            } else {
+                i++;
+            }
+        }
+        if (dirty) {
+            pager_mark_dirty(table->pager, current_leaf_page_num);
+        }
+        uint32_t next_leaf_num = *(uint32_t *) ((uint8_t *) curr + NEXT_LEAF_OFFSET);
+        if (next_leaf_num == 0) break;
+        current_leaf_page_num = next_leaf_num;
+        curr = pager_get_page(table->pager, current_leaf_page_num);
+    }
+
+    return COMMAND_SUCCESS;
+}
+
 // column.name/literal_string.text are borrowed, non-null-terminated pointers
 // into the raw input line.  comparisons must be length-bounded, never strcmp which causes the bug in earlier versions.
 bool column_name_is(const AstNode *column, const char *name) {

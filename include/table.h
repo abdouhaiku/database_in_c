@@ -45,6 +45,8 @@ CommandResult insert_command(AstNode *tree, Table *table);
 
 CommandResult update_command(AstNode *tree, Table *table);
 
+CommandResult delete_command(AstNode *tree, Table *table);
+
 CommandResult create_table(Pager *pager, AstNode *tree);
 
 void serialize_row(const Row *row, uint8_t *destination);
