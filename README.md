@@ -112,6 +112,7 @@ Resources used while designing the B+-tree deletion/merging model:
 - [Let's Build a Simple Database (cstack.github.io)](https://cstack.github.io/db_tutorial/parts/part7.html), the tutorial this project is loosely inspired by
 - [USF B-Tree Visualization](https://www.cs.usfca.edu/~galles/visualization/BTree.html), interactive, watch the borrow-vs-merge decision happen step by step
 - [CMU 15-445/645, Lecture 08: Tree Indexes](https://15445.courses.cs.cmu.edu/)
+- Robert Lafore, *Data Structures & Algorithms in Java*, Chapter 9, covers 2-3-4 trees, red-black trees, and B-trees
 - Ramakrishnan & Gehrke, *Database Management Systems*, Chapter 10.6, "Deletion"
 - Silberschatz, Korth & Sudarshan, *Database System Concepts*, B+-Tree deletion section
 - Douglas Comer, ["The Ubiquitous B-Tree"](https://carlosproal.com/ir/papers/p121-comer.pdf) (1979)
