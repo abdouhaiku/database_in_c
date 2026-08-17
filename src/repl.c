@@ -43,5 +43,6 @@ void close_input_buffer(InputBuffer *input_buffer) {
 
 void print_prompt(void) {
     printf("miniDB> ");
+    fflush(stdout);
 }
 
