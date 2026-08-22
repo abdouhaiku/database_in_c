@@ -85,14 +85,6 @@ miniDB> SELECT * FROM users;
 
 ---
 
-## A few engineering decisions worth calling out
-
-- **Per-table row size, computed from the real schema.** Row size used to be one shared, worst-case constant sized for the widest possible column. That silently collapsed every table's leaf-page capacity down to a single row per page. It's now computed per table from that table's actual catalog schema and threaded through every B+-tree accessor.
-- **Query execution as a pull-based cursor pipeline.** A `PlanNode` tree (scan / PK-lookup / filter / projection) compiles from the AST once, then a matching `Cursor` tree pulls rows one at a time through a single dispatch point (`cursor_next`). No operator prints anything or knows what sits above or below it in the pipeline.
-- **A real, traced bug chain, not a hypothetical one.** A structural assumption from Phase 4 (the root page always being page 0) silently broke once Phase 6 introduced a catalog page, and stayed dormant and harmless by coincidence for a long time. It only surfaced once splits became frequent again in Phase 7. Fixed by auditing every place that assumption was baked in, not just patching the crash site.
-
----
-
 ## Roadmap and known limitations
 
 Phases 1–7, in-memory row store, persistent pages, single-node B+ tree, multi-level B+ tree, SQL lexer/AST, catalog and multiple tables, query execution pipeline, are complete. Phase 8 (Update and Delete) is mostly complete:
